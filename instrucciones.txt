@@ -1,0 +1,12 @@
+instalar construcccion de instalador 
+
+pip3 install pyinstaller
+
+ejecutar para empaquetar
+ ./build_linux.sh  
+
+
+ creara una carpeta dis/ejecutable.app
+
+ copiar dist - ejecutar y se crearan las carpetas correspondientes
+ 

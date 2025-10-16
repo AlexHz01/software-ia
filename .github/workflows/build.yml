@@ -1,0 +1,97 @@
+name: Build Biblioteca IA
+
+on:
+  push:
+    tags: ['v*']           # Se ejecuta cuando haces git tag v1.0, v2.0, etc.
+  workflow_dispatch:        # Permite ejecutar manualmente desde GitHub
+
+jobs:
+  build-linux:
+    name: Build Linux Executable
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        
+    - name: Build Linux executable
+      run: |
+        python build.py
+        
+    - name: Upload Linux executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: BibliotecaIA-Linux
+        path: |
+          dist/BibliotecaIA
+          config/
+          resources/
+
+  build-windows:
+    name: Build Windows Executable  
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        
+    - name: Build Windows executable
+      run: |
+        python build.py
+        
+    - name: Upload Windows executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: BibliotecaIA-Windows
+        path: |
+          dist/BibliotecaIA.exe
+          config/
+          resources/
+
+  build-macos:
+    name: Build macOS Executable
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        
+    - name: Build macOS executable
+      run: |
+        python build.py
+        
+    - name: Upload macOS executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: BibliotecaIA-macOS
+        path: |
+          dist/BibliotecaIA
+          config/
+          resources/

@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+
+# Build
+dist/
+build/
+*.spec
+
+# Datos de la aplicación
+data/
+*.log
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+#config
+sistema_config.json
