@@ -2,12 +2,12 @@ name: Build Biblioteca IA
 
 on:
   push:
-    tags: ['v*']           # Se ejecuta cuando haces git tag v1.0, v2.0, etc.
-  workflow_dispatch:        # Permite ejecutar manualmente desde GitHub
+    tags: ['v*']
+  workflow_dispatch:
 
 jobs:
   build-linux:
-    name: Build Linux Executable
+    name: Build Linux
     runs-on: ubuntu-latest
     
     steps:
@@ -19,15 +19,21 @@ jobs:
       with:
         python-version: '3.10'
         
-    - name: Install dependencies
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y portaudio19-dev python3-pyaudio
+        
+    - name: Install Python dependencies
       run: |
         pip install -r requirements.txt
+        pip install pyinstaller  # Asegurar que está instalado
         
     - name: Build Linux executable
       run: |
         python build.py
         
-    - name: Upload Linux executable
+    - name: Upload Linux Artifact
       uses: actions/upload-artifact@v4
       with:
         name: BibliotecaIA-Linux
@@ -37,7 +43,7 @@ jobs:
           resources/
 
   build-windows:
-    name: Build Windows Executable  
+    name: Build Windows
     runs-on: windows-latest
     
     steps:
@@ -49,49 +55,20 @@ jobs:
       with:
         python-version: '3.10'
         
-    - name: Install dependencies
+    - name: Install Python dependencies
       run: |
         pip install -r requirements.txt
+        pip install pyinstaller  # Asegurar que está instalado
         
     - name: Build Windows executable
       run: |
         python build.py
         
-    - name: Upload Windows executable
+    - name: Upload Windows Artifact
       uses: actions/upload-artifact@v4
       with:
         name: BibliotecaIA-Windows
         path: |
           dist/BibliotecaIA.exe
-          config/
-          resources/
-
-  build-macos:
-    name: Build macOS Executable
-    runs-on: macos-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-        
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
-        
-    - name: Build macOS executable
-      run: |
-        python build.py
-        
-    - name: Upload macOS executable
-      uses: actions/upload-artifact@v4
-      with:
-        name: BibliotecaIA-macOS
-        path: |
-          dist/BibliotecaIA
           config/
           resources/
