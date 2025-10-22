@@ -33,17 +33,39 @@ class PDFProcessor:
         else:
             self.openai_available = False
             
-        self.encoding = tiktoken.get_encoding("cl100k_base")
-        
+        # MANEJO SEGURO DE TIKTOKEN
+        try:
+            self.encoding = tiktoken.get_encoding("cl100k_base")
+            print("✅ Tiktoken cargado correctamente")
+        except ValueError as e:
+            if "Unknown encoding" in str(e):
+                print("⚠️ Error: No se encontraron archivos de codificación tiktoken")
+                print("🔧 Usando modo de compatibilidad sin tiktoken")
+                self.encoding = None
+            else:
+                raise e
+        except Exception as e:
+            print(f"⚠️ Error inesperado con tiktoken: {e}")
+            self.encoding = None
+    
         # Configuraciones desde la sección específica
         self.tamano_fragmento = config_manager.get_tamano_fragmento()
         self.solapamiento_fragmento = config_manager.get_solapamiento_fragmento()
         self.modelo_embeddings = config_manager.get_modelo_embeddings()
         self.batch_size = config_manager.get_batch_size_embeddings()
-    
+        
     def contar_tokens(self, texto: str) -> int:
-        """Contar tokens en un texto"""
-        return len(self.encoding.encode(texto))
+        """Contar tokens en un texto de forma segura"""
+        if self.encoding and texto:
+            try:
+                return len(self.encoding.encode(texto))
+            except Exception as e:
+                print(f"⚠️ Error contando tokens, usando aproximación: {e}")
+                # Fallback: aproximación por palabras (4 tokens ≈ 3 palabras)
+                return len(texto.split()) * 4 // 3
+        else:
+            # Fallback cuando tiktoken no está disponible
+            return len(texto.split()) * 4 // 3 if texto else 0
     
     def extraer_texto_pdf(self, pdf_path: str) -> Tuple[List[Dict], int]:
         """Extraer texto de un PDF y dividirlo en fragmentos optimizados"""
