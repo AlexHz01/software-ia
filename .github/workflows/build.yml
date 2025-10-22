@@ -8,7 +8,7 @@ on:
 jobs:
   build-linux:
     name: Build Linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04 
     
     steps:
     - name: Checkout code
@@ -35,7 +35,7 @@ jobs:
         
     - name: Preload tiktoken encodings
       run: |
-        python -c "import tiktoken; enc = tiktoken.get_encoding('cl100k_base'); print(f'✅ Tiktoken loaded: {enc.name}')"
+        python -c "import tiktoken; enc = tiktoken.get_encoding('cl100k_base'); print(f'Tiktoken loaded: {enc.name}')"
         
     - name: Build application
       run: |
@@ -68,7 +68,7 @@ jobs:
         
     - name: Preload tiktoken encodings
       run: |
-        python -c "import tiktoken; enc = tiktoken.get_encoding('cl100k_base'); print(f'✅ Tiktoken loaded: {enc.name}')"
+        python -c "import tiktoken; enc = tiktoken.get_encoding('cl100k_base'); print(f'Tiktoken loaded: {enc.name}')"
         
     - name: Build application
       run: |
