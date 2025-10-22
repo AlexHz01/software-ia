@@ -23,13 +23,18 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y portaudio19-dev python3-pyaudio
+        sudo apt-get install -y libgl1-mesa-dev libxcb-xinerama0
         
     - name: Install Python dependencies
       run: |
         pip install -r requirements.txt
-        pip install pyinstaller  # Asegurar que está instalado
+        pip install pyinstaller
         
-    - name: Build Linux executable
+    - name: Preload tiktoken encodings
+      run: |
+        python -c "import tiktoken; enc = tiktoken.get_encoding('cl100k_base'); print(f'✅ Tiktoken loaded: {enc.name}')"
+        
+    - name: Build application
       run: |
         python build.py
         
@@ -37,10 +42,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: BibliotecaIA-Linux
-        path: |
-          dist/BibliotecaIA
-          config/
-          resources/
+        path: dist/BibliotecaIA
 
   build-windows:
     name: Build Windows
@@ -58,9 +60,13 @@ jobs:
     - name: Install Python dependencies
       run: |
         pip install -r requirements.txt
-        pip install pyinstaller  # Asegurar que está instalado
+        pip install pyinstaller
         
-    - name: Build Windows executable
+    - name: Preload tiktoken encodings
+      run: |
+        python -c "import tiktoken; enc = tiktoken.get_encoding('cl100k_base'); print(f'✅ Tiktoken loaded: {enc.name}')"
+        
+    - name: Build application
       run: |
         python build.py
         
@@ -68,7 +74,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: BibliotecaIA-Windows
-        path: |
-          dist/BibliotecaIA.exe
-          config/
-          resources/
+        path: dist/BibliotecaIA.exe

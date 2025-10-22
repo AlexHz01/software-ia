@@ -217,7 +217,7 @@ class ConfigApp(BaseApp):
         type_label = QLabel("Motor de base de datos:")
         type_label.setFixedWidth(180)
         self.db_type_combo = QComboBox()
-        self.db_type_combo.addItems(["PostgreSQL", "SQLite"])
+        self.db_type_combo.addItems(["SQLite", "PostgreSQL"])
         self.db_type_combo.currentTextChanged.connect(self.on_db_type_changed)
         type_layout.addWidget(type_label)
         type_layout.addWidget(self.db_type_combo)

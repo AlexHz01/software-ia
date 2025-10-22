@@ -4,37 +4,22 @@ import sys
 import subprocess
 import platform
 from pathlib import Path
+import tiktoken
 
 def safe_print(text):
-    try:
-        print(text)
-    except UnicodeEncodeError:
-        clean_text = text.encode('ascii', 'ignore').decode('ascii')
-        print(clean_text)
+    print(text)
 
 def setup_environment():
-    """Configurar el entorno igual que main_launcher.py"""
-    # Las mismas rutas que main_launcher.py
+    """Configurar el entorno"""
     data_dir = Path("data")
     config_dir = Path("config") 
     resources_dir = Path("resources")
     src_dir = Path("src")
     
-    # Crear directorios (igual que main_launcher.py)
     directories = [data_dir, config_dir, resources_dir]
     for directory in directories:
         directory.mkdir(parents=True, exist_ok=True)
         safe_print(f"✅ Directorio: {directory}")
-    
-    # Crear archivos básicos si las carpetas están vacías
-    if not any(config_dir.iterdir()):
-        (config_dir / "app_config.json").write_text('{"app": {"name": "Biblioteca IA"}}')
-        safe_print("📝 Archivo de configuración creado")
-    
-    if not any(resources_dir.iterdir()):
-        (resources_dir / "version.txt").write_text("v1.0.0")
-        (resources_dir / "icons").mkdir(exist_ok=True)
-        safe_print("📝 Recursos básicos creados")
     
     return config_dir, resources_dir, src_dir
 
@@ -43,10 +28,19 @@ def build_application():
     system = platform.system().lower()
     
     safe_print(f"🔨 Construyendo aplicación para {system.upper()}...")
-    safe_print(f"📁 Directorio actual: {Path('.').absolute()}")
     
-    # Configurar entorno primero
+    # Configurar entorno
     config_dir, resources_dir, src_dir = setup_environment()
+    
+    # PRIMERO: Forzar descarga de tiktoken
+    safe_print("📥 Descargando codificaciones tiktoken...")
+    try:
+        tiktoken.get_encoding("cl100k_base")
+        tiktoken.get_encoding("p50k_base") 
+        tiktoken.get_encoding("r50k_base")
+        safe_print("✅ Codificaciones tiktoken descargadas")
+    except Exception as e:
+        safe_print(f"⚠️ Error descargando tiktoken: {e}")
     
     # Configuración PyInstaller
     args = [
@@ -54,44 +48,43 @@ def build_application():
         "--name=BibliotecaIA",
         "--onefile",
         "--windowed",
-        "--console",
+        # Dependencias PyQt5
         "--hidden-import=PyQt5.QtCore",
         "--hidden-import=PyQt5.QtGui",
-        "--hidden-import=PyQt5.QtWidgets",
+        "--hidden-import=PyQt5.QtWidgets", 
+        "--hidden-import=PyQt5.QtNetwork",
+        # Dependencias tiktoken (IMPORTANTE)
+        "--hidden-import=tiktoken",
+        "--hidden-import=tiktoken.core",
+        "--hidden-import=tiktoken.registry", 
+        "--hidden-import=tiktoken.load",
+        "--collect-all=tiktoken",  # INCLUIR TODOS LOS ARCHIVOS
+        # Otras dependencias
         "--hidden-import=openai",
-        "--hidden-import=pydub", 
+        "--hidden-import=pydub",
         "--hidden-import=config_manager",
         "--hidden-import=requests",
         "--hidden-import=urllib3",
-        "--hidden-import=PyQt5.QtNetwork",
+        "--hidden-import=sqlalchemy",
+        "--hidden-import=psycopg2",
         "--clean",
         "--noconfirm",
     ]
     
-    # Usar rutas absolutas para mayor seguridad
-    if system == "windows":
-        args.extend([
-            f"--add-data={config_dir.absolute()};config",
-            f"--add-data={resources_dir.absolute()};resources"
-        ])
-    else:
-        args.extend([
-            f"--add-data={config_dir.absolute()}:config",
-            f"--add-data={resources_dir.absolute()}:resources"
-        ])
+    # Agregar datos
+    separator = ";" if system == "windows" else ":"
+    args.extend([
+        f"--add-data={config_dir.absolute()}{separator}config",
+        f"--add-data={resources_dir.absolute()}{separator}resources"
+    ])
     
     # Archivo principal
     main_file = src_dir / "main.py"
     args.append(str(main_file))
     
-    safe_print(f"📁 Config: {config_dir.absolute()} (existe: {config_dir.exists()})")
-    safe_print(f"📁 Resources: {resources_dir.absolute()} (existe: {resources_dir.exists()})")
-    safe_print(f"📁 Main: {main_file} (existe: {main_file.exists()})")
+    safe_print(f"📁 Main: {main_file}")
     
     try:
-        subprocess.run(["pyinstaller", "--version"], check=True, capture_output=True)
-        safe_print("✅ PyInstaller encontrado")
-        
         safe_print("🚀 Ejecutando PyInstaller...")
         result = subprocess.run(args, check=True, capture_output=True, text=True)
         
@@ -105,8 +98,6 @@ def build_application():
             safe_print(f"📊 Tamaño: {file_size:.2f} MB")
         else:
             safe_print("❌ No se pudo encontrar el ejecutable")
-            if result.stderr:
-                safe_print(f"Errores: {result.stderr}")
             
     except subprocess.CalledProcessError as e:
         safe_print(f"❌ Error: {e}")
