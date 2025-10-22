@@ -1,0 +1,71 @@
+{
+    "general": {
+        "tema": "claro",
+        "idioma": "es",
+        "auto_inicio": false,
+        "notificaciones": true
+    },
+    "ia": {
+        "api_key": "",
+        "modelo": "gpt-3.5-turbo",
+        "temperatura": 0.7,
+        "modelo_whisper": "whisper-1"
+    },
+    "almacenamiento": {
+        "ruta_datos": "./data",
+        "limite_almacenamiento_mb": 1000,
+        "auto_limpieza": true,
+        "conservar_pdfs": false
+    },
+    "transcripcion": {
+        "segment_length_min": 10,
+        "formatear_automaticamente": true
+    },
+    "database": {
+        "tipo": "sqlite",
+        "postgresql": {
+            "host": "localhost",
+            "puerto": 5432,
+            "usuario": "postgres",
+            "password": "",
+            "nombre_bd": "biblioteca_ia",
+            "schema": "public",
+            "ssl_mode": "prefer",
+            "pool_min": 1,
+            "pool_max": 10,
+            "timeout": 30
+        },
+        "sqlite": {
+            "ruta_db": "./data/biblioteca.db",
+            "auto_backup": true,
+            "backup_interval_days": 7
+        }
+    },
+    "biblioteca_ia": {
+        "procesamiento": {
+            "tamano_fragmento": 1000,
+            "solapamiento_fragmento": 200,
+            "max_fragmentos_por_pagina": 10,
+            "min_longitud_fragmento": 50,
+            "max_tokens_por_fragmento": 500
+        },
+        "embeddings": {
+            "modelo": "text-embedding-ada-002",
+            "dimensiones": 1536,
+            "batch_size": 10,
+            "timeout": 30
+        },
+        "consulta": {
+            "top_k_fragmentos": 5,
+            "umbral_similitud": 0.7,
+            "max_tokens_respuesta": 1500,
+            "incluir_referencias": true,
+            "temperatura_consulta": 0.3
+        },
+        "ui": {
+            "mostrar_progreso_detallado": true,
+            "auto_actualizar_estadisticas": true,
+            "mostrar_fragmentos_relevantes": false
+        }
+    }
+}

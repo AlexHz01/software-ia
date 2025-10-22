@@ -30,7 +30,6 @@ def setup_environment():
 # Configurar entorno al inicio
 BASE_DIR, APP_DIR, DATA_DIR, CONFIG_DIR, RESOURCES_DIR = setup_environment()
 
-# El resto de tu main.py original permanece igual...
 import traceback
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtCore import Qt

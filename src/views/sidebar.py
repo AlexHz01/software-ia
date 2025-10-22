@@ -115,7 +115,7 @@ class Sidebar(QWidget):
         logo_layout = QHBoxLayout()
         
         # Logo
-        logo_label = QLabel("📚")
+        logo_label = QLabel("📚 IDE")
         logo_label.setStyleSheet("font-size: 32px;")
         logo_layout.addWidget(logo_label)
         
@@ -128,7 +128,7 @@ class Sidebar(QWidget):
                 font-weight: bold;
             }
         """)
-        subtitle = QLabel("Dashboard")
+        subtitle = QLabel("Biblioteca Inteligente")
         subtitle.setStyleSheet("""
             QLabel {
                 color: #bdc3c7;

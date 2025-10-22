@@ -79,16 +79,16 @@ class BibliotecaAppManager(QObject):
             biblioteca_app = BibliotecaApp()
             self.nav_controller.register_app("biblioteca", biblioteca_app)
             self.logger.info("✅ Biblioteca registrada")
-            
-            # Aplicación de Configuración
-            config_app = ConfigApp()
-            self.nav_controller.register_app("config", config_app)
-            self.logger.info("✅ Configuración registrada")
 
             # NUEVA: Aplicación de Transcripción
             transcripcion_app = TranscripcionApp()
             self.nav_controller.register_app("transcripcion", transcripcion_app)
             self.logger.info("✅ Transcripción registrada")
+            
+            # Aplicación de Configuración
+            config_app = ConfigApp()
+            self.nav_controller.register_app("config", config_app)
+            self.logger.info("✅ Configuración registrada")
             
             # VERIFICACIÓN CRÍTICA
             apps = self.nav_controller.get_available_apps()

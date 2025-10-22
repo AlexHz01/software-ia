@@ -12,7 +12,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from pydub import AudioSegment
 from openai import OpenAI
 
-from config_manager import config_manager
+from config.config_manager import config_manager
 from views.apps.base_app import BaseApp
 
 class TranscripcionWorker(QThread):
@@ -181,7 +181,7 @@ class TranscripcionApp(BaseApp):
         return "Transcripción IA"
     
     def get_icon(self):
-        return "🎤"
+        return "🎙️"
     
     def setup_ui(self):
         """Configurar la interfaz de usuario"""
