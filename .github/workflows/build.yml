@@ -24,9 +24,12 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y portaudio19-dev python3-pyaudio
         sudo apt-get install -y libgl1-mesa-dev libxcb-xinerama0
+        # Dependencias para pydub (ffmpeg)
+        sudo apt-get install -y ffmpeg
         
     - name: Install Python dependencies
       run: |
+        pip install --upgrade pip
         pip install -r requirements.txt
         pip install pyinstaller
         
@@ -59,6 +62,7 @@ jobs:
         
     - name: Install Python dependencies
       run: |
+        pip install --upgrade pip
         pip install -r requirements.txt
         pip install pyinstaller
         

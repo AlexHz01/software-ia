@@ -62,6 +62,7 @@ def build_application():
         # Otras dependencias
         "--hidden-import=openai",
         "--hidden-import=pydub",
+        "--hidden-import=pydub.audio_segment",  # ✅ Agregado para pydub
         "--hidden-import=config_manager",
         "--hidden-import=requests",
         "--hidden-import=urllib3",
