@@ -19,7 +19,7 @@ def setup_environment():
     directories = [data_dir, config_dir, resources_dir]
     for directory in directories:
         directory.mkdir(parents=True, exist_ok=True)
-        safe_print(f"✅ Directorio: {directory}")
+        safe_print(f"Directorio: {directory}")
     
     return config_dir, resources_dir, src_dir
 
@@ -27,20 +27,20 @@ def build_application():
     """Construir la aplicación"""
     system = platform.system().lower()
     
-    safe_print(f"🔨 Construyendo aplicación para {system.upper()}...")
+    safe_print(f"Construyendo aplicación para {system.upper()}...")
     
     # Configurar entorno
     config_dir, resources_dir, src_dir = setup_environment()
     
     # PRIMERO: Forzar descarga de tiktoken
-    safe_print("📥 Descargando codificaciones tiktoken...")
+    safe_print("Descargando codificaciones tiktoken...")
     try:
         tiktoken.get_encoding("cl100k_base")
         tiktoken.get_encoding("p50k_base") 
         tiktoken.get_encoding("r50k_base")
-        safe_print("✅ Codificaciones tiktoken descargadas")
+        safe_print("Codificaciones tiktoken descargadas")
     except Exception as e:
-        safe_print(f"⚠️ Error descargando tiktoken: {e}")
+        safe_print(f"Error descargando tiktoken: {e}")
     
     # Configuración PyInstaller
     args = [
@@ -62,7 +62,7 @@ def build_application():
         # Otras dependencias
         "--hidden-import=openai",
         "--hidden-import=pydub",
-        "--hidden-import=pydub.audio_segment",  # ✅ Agregado para pydub
+        "--hidden-import=pydub.audio_segment",  # Agregado para pydub
         "--hidden-import=config_manager",
         "--hidden-import=requests",
         "--hidden-import=urllib3",
@@ -83,10 +83,10 @@ def build_application():
     main_file = src_dir / "main.py"
     args.append(str(main_file))
     
-    safe_print(f"📁 Main: {main_file}")
+    safe_print(f"Main: {main_file}")
     
     try:
-        safe_print("🚀 Ejecutando PyInstaller...")
+        safe_print("Ejecutando PyInstaller...")
         result = subprocess.run(args, check=True, capture_output=True, text=True)
         
         exe_name = "BibliotecaIA.exe" if system == "windows" else "BibliotecaIA"
@@ -94,14 +94,14 @@ def build_application():
         
         if dist_path.exists():
             file_size = dist_path.stat().st_size / (1024 * 1024)
-            safe_print("✅ ¡Aplicación construida exitosamente!")
-            safe_print(f"📦 Ejecutable: {dist_path}")
-            safe_print(f"📊 Tamaño: {file_size:.2f} MB")
+            safe_print("¡Aplicación construida exitosamente!")
+            safe_print(f"Ejecutable: {dist_path}")
+            safe_print(f"Tamaño: {file_size:.2f} MB")
         else:
-            safe_print("❌ No se pudo encontrar el ejecutable")
+            safe_print("No se pudo encontrar el ejecutable")
             
     except subprocess.CalledProcessError as e:
-        safe_print(f"❌ Error: {e}")
+        safe_print(f"Error: {e}")
         if e.stderr:
             safe_print(f"Detalles: {e.stderr}")
         sys.exit(1)
