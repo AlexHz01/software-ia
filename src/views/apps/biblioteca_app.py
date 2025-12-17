@@ -23,6 +23,148 @@ from ai.query_processor import QueryProcessor
 from config.config_manager import config_manager
 from views.apps.base_app import BaseApp
 
+# ============ CHAT WIDGETS ============
+
+class ChatMessageWidget(QWidget):
+    """Widget para mostrar un mensaje estilo chat"""
+    def __init__(self, text, is_user=False, parent=None):
+        super().__init__(parent)
+        self.text = text
+        self.is_user = is_user
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(15, 8, 15, 8)
+        
+        if self.is_user:
+            # Mensaje del usuario - alineado a la derecha
+            layout.addStretch()
+            bubble = self.create_bubble("#3498db", "#ffffff")
+            layout.addWidget(bubble)
+        else:
+            # Mensaje de la IA - alineado a la izquierda con icono
+            icon = QLabel("🤖")
+            icon.setFixedSize(32, 32)
+            icon.setAlignment(Qt.AlignCenter)
+            icon.setStyleSheet("""
+                background-color: #2ecc71;
+                border-radius: 16px;
+                font-size: 18px;
+            """)
+            layout.addWidget(icon, alignment=Qt.AlignTop)
+            
+            bubble = self.create_bubble("#ecf0f1", "#2c3e50")
+            layout.addWidget(bubble)
+            layout.addStretch()
+    
+    def create_bubble(self, bg_color, text_color):
+        """Crear la burbuja del mensaje"""
+        bubble = QFrame()
+        bubble.setStyleSheet(f"""
+            QFrame {{
+                background-color: {bg_color};
+                border-radius: 12px;
+                padding: 10px 15px;
+            }}
+        """)
+        
+        bubble_layout = QVBoxLayout(bubble)
+        bubble_layout.setContentsMargins(5, 5, 5, 5)
+        
+        label = QLabel(self.text)
+        label.setWordWrap(True)
+        label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        label.setStyleSheet(f"""
+            color: {text_color};
+            font-size: 14px;
+            background: transparent;
+            border: none;
+        """)
+        bubble_layout.addWidget(label)
+        
+        return bubble
+
+class ChatInputArea(QWidget):
+    """Área de entrada de mensajes estilo chat"""
+    message_sent = pyqtSignal(str)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(15, 10, 15, 15)
+        
+        # Contenedor del input
+        input_container = QFrame()
+        input_container.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border: 2px solid #bdc3c7;
+                border-radius: 20px;
+            }
+            QFrame:focus-within {
+                border-color: #3498db;
+            }
+        """)
+        
+        input_layout = QHBoxLayout(input_container)
+        input_layout.setContentsMargins(15, 5, 5, 5)
+        
+        # Campo de texto
+        self.input_field = QLineEdit()
+        self.input_field.setPlaceholderText("Escribe tu pregunta aquí...")
+        self.input_field.setStyleSheet("""
+            QLineEdit {
+                border: none;
+                background: transparent;
+                font-size: 14px;
+                padding: 5px;
+            }
+        """)
+        self.input_field.returnPressed.connect(self.send_message)
+        input_layout.addWidget(self.input_field)
+        
+        # Botón de enviar
+        self.send_btn = QPushButton("➤")
+        self.send_btn.setFixedSize(36, 36)
+        self.send_btn.setCursor(Qt.PointingHandCursor)
+        self.send_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                border-radius: 18px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #21618c;
+            }
+        """)
+        self.send_btn.clicked.connect(self.send_message)
+        input_layout.addWidget(self.send_btn)
+        
+        layout.addWidget(input_container)
+    
+    def send_message(self):
+        text = self.input_field.text().strip()
+        if text:
+            self.message_sent.emit(text)
+            self.input_field.clear()
+    
+    def set_enabled(self, enabled):
+        """Habilitar/deshabilitar el área de entrada"""
+        self.input_field.setEnabled(enabled)
+        self.send_btn.setEnabled(enabled)
+
+# ============ END CHAT WIDGETS ============
+
 class ProcesarLibroThread(QThread):
     """Hilo para procesar libros en segundo plano"""
     progreso = pyqtSignal(int)
@@ -335,76 +477,58 @@ class BibliotecaApp(BaseApp):
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(15)
         
-        # Título de la aplicación
-        title = QLabel("📚 Biblioteca IA")
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 24px;
+        # Contenedor principal con layout vertical
+        main_container = QWidget()
+        main_layout = QVBoxLayout(main_container)
+        main_layout.setContentsMargins(0, 10, 0, 0)  # Margen superior para evitar superposición
+        main_layout.setSpacing(0)
+        
+        # Panel superior - Libros (colapsable)
+        self.books_widget = QWidget()
+        self.books_widget.setMaximumHeight(250)  # Altura cuando está expandido
+        books_layout = QVBoxLayout(self.books_widget)
+        books_layout.setContentsMargins(10, 5, 10, 10)
+        books_layout.setSpacing(5)
+        
+        # Botón para colapsar/expandir la sección de libros
+        toggle_books_layout = QHBoxLayout()
+        self.btn_toggle_books = QPushButton("📚 Tus Libros ▼")
+        self.btn_toggle_books.setStyleSheet("""
+            QPushButton {
+                background-color: #f8f9fa;
+                border: none;
+                border-bottom: 2px solid #e9ecef;
+                padding: 8px 15px;
+                text-align: left;
                 font-weight: bold;
+                font-size: 13px;
                 color: #2c3e50;
-                padding: 5px 0px;
-            }
-        """)
-        layout.addWidget(title)
-        
-        # Contenedor principal con splitter para mejor distribución
-        splitter = QSplitter(Qt.Horizontal)
-        
-        # Panel izquierdo - Libros y acciones
-        left_widget = QWidget()
-        left_layout = QVBoxLayout(left_widget)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(10)
-        
-        # Acciones principales
-        actions_group = QGroupBox("Acciones")
-        actions_layout = QVBoxLayout(actions_group)
-        
-        self.btn_add_book = QPushButton("➕ Agregar Libro PDF")
-        self.btn_add_book.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
-                padding: 10px;
-                border-radius: 5px;
-                font-weight: bold;
-                margin: 2px 0px;
             }
             QPushButton:hover {
-                background-color: #2980b9;
+                background-color: #e9ecef;
             }
         """)
-        self.btn_add_book.clicked.connect(self.on_add_book)
-        actions_layout.addWidget(self.btn_add_book)
+        self.btn_toggle_books.clicked.connect(self.toggle_books_section)
+        self.books_section_visible = True
+        toggle_books_layout.addWidget(self.btn_toggle_books)
+        books_layout.addLayout(toggle_books_layout)
         
-         # Botón para búsqueda avanzada
-        self.btn_buscar_avanzado = QPushButton("🔍 Búsqueda Avanzada")
-        self.btn_buscar_avanzado.setStyleSheet("""
-            QPushButton {
-                background-color: #9b59b6;
-                color: white;
-                border: none;
-                padding: 8px;
-                border-radius: 5px;
-                font-weight: bold;
-                margin: 2px 0px;
-            }
-            QPushButton:hover {
-                background-color: #8e44ad;
-            }
-        """)
-        self.btn_buscar_avanzado.clicked.connect(self.mostrar_busqueda_avanzada)
-        actions_layout.addWidget(self.btn_buscar_avanzado)
-        
-        actions_layout.addWidget(self.create_stats_panel())
-        actions_layout.addStretch()
-        
-        left_layout.addWidget(actions_group)
+        # Contenedor para la sección de libros (el que se oculta/muestra)
+        self.books_content = QWidget()
+        books_content_layout = QVBoxLayout(self.books_content)
+        books_content_layout.setContentsMargins(0, 0, 0, 0)
+        books_content_layout.setSpacing(10)
         
         # Grupo de libros con herramientas de búsqueda
-        libros_group = QGroupBox("Tus Libros")
+        libros_group = QFrame()
+        libros_group.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border: none;
+            }
+        """)
         libros_layout = QVBoxLayout(libros_group)
+        libros_layout.setContentsMargins(5, 5, 5, 5)
         
         # Barra de búsqueda rápida
         search_layout = QHBoxLayout()
@@ -434,6 +558,21 @@ class BibliotecaApp(BaseApp):
                 border-radius: 4px;
                 font-size: 11px;
                 min-width: 100px;
+                background-color: white;
+                color: #2c3e50;
+            }
+            QComboBox:hover {
+                border-color: #3498db;
+                background-color: #f8f9fa;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #2c3e50;
+                selection-background-color: #e8f4f8;
+                selection-color: #2c3e50;
             }
         """)
         self.combo_orden.currentTextChanged.connect(self.actualizar_lista_libros)
@@ -465,7 +604,8 @@ class BibliotecaApp(BaseApp):
                 color: white;
             }
             QListWidget::item:hover {
-                background-color: #f8f9fa;
+                background-color: #e8f4f8;
+                color: #2c3e50;
             }
         """)
         self.lista_libros.itemDoubleClicked.connect(self.on_libro_doble_click)
@@ -523,153 +663,236 @@ class BibliotecaApp(BaseApp):
         self.info_libro_label.setWordWrap(True)
         libros_layout.addWidget(self.info_libro_label)
         
-        left_layout.addWidget(libros_group)
+        books_content_layout.addWidget(libros_group)
+        books_layout.addWidget(self.books_content)
+        main_layout.addWidget(self.books_widget)
         
-        # Panel derecho - Consulta y respuesta
-        right_widget = QWidget()
-        right_layout = QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(0, 0, 0, 0)
+        # Panel inferior - Chat IA (ocupa más espacio)
+        chat_widget = QWidget()
+        chat_layout = QVBoxLayout(chat_widget)
+        chat_layout.setContentsMargins(0, 0, 0, 0)
+        chat_layout.setSpacing(0)
         
-        # Área de consulta
-        consulta_group = QGroupBox("Consulta IA")
-        consulta_layout = QVBoxLayout(consulta_group)
+        # Header con selector de ámbito
+        header_frame = QFrame()
+        header_frame.setStyleSheet("""
+            QFrame {
+                background-color: #f8f9fa;
+                border-bottom: 1px solid #dee2e6;
+            }
+        """)
+        header_layout = QHBoxLayout(header_frame)
+        header_layout.setContentsMargins(15, 10, 15, 10)
         
-        # Selector de ámbito de búsqueda
-        ambito_layout = QHBoxLayout()
-        ambito_layout.addWidget(QLabel("Buscar en:"))
+        header_layout.addWidget(QLabel("🔍 Buscar en:"))
         
         self.combo_ambito = QComboBox()
         self.combo_ambito.addItems(["Todos los libros", "Libro actual", "Libros seleccionados..."])
         self.combo_ambito.setStyleSheet("""
             QComboBox {
-                padding: 5px;
+                padding: 5px 10px;
                 border: 1px solid #bdc3c7;
                 border-radius: 4px;
                 font-size: 12px;
+                background: white;
             }
         """)
         self.combo_ambito.currentTextChanged.connect(self.cambiar_ambito_busqueda)
-        ambito_layout.addWidget(self.combo_ambito)
+        header_layout.addWidget(self.combo_ambito)
         
-        # Indicador de selección actual
         self.label_ambito_actual = QLabel("📚 Todos los libros")
         self.label_ambito_actual.setStyleSheet("font-size: 11px; color: #7f8c8d; font-style: italic;")
-        ambito_layout.addWidget(self.label_ambito_actual)
-        ambito_layout.addStretch()
+        header_layout.addWidget(self.label_ambito_actual)
         
-        consulta_layout.addLayout(ambito_layout)
+        header_layout.addStretch()
         
-        # Campo de pregunta
-        self.input_pregunta = QLineEdit()
-        self.input_pregunta.setPlaceholderText("Escribe tu pregunta sobre los libros...")
-        self.input_pregunta.setStyleSheet("""
-            QLineEdit {
-                padding: 10px;
-                border: 2px solid #bdc3c7;
-                border-radius: 5px;
-                font-size: 14px;
-            }
-            QLineEdit:focus {
-                border-color: #3498db;
-            }
-        """)
-        self.input_pregunta.returnPressed.connect(self.on_enviar_consulta)
-        consulta_layout.addWidget(self.input_pregunta)
-        
-        # Botones de acción
-        btn_layout = QHBoxLayout()
-        
-        self.btn_enviar_consulta = QPushButton("🚀 Enviar Consulta")
-        self.btn_enviar_consulta.setStyleSheet("""
+        # Botón para agregar libro
+        btn_add = QPushButton("➕")
+        btn_add.setToolTip("Agregar Libro PDF")
+        btn_add.setFixedSize(32, 32)
+        btn_add.setCursor(Qt.PointingHandCursor)
+        btn_add.setStyleSheet("""
             QPushButton {
-                background-color: #27ae60;
+                background-color: #3498db;
                 color: white;
                 border: none;
-                padding: 10px 15px;
-                border-radius: 5px;
+                border-radius: 16px;
+                font-size: 18px;
                 font-weight: bold;
-                font-size: 13px;
             }
             QPushButton:hover {
-                background-color: #219a52;
-            }
-            QPushButton:disabled {
-                background-color: #95a5a6;
+                background-color: #2980b9;
             }
         """)
-        self.btn_enviar_consulta.clicked.connect(self.on_enviar_consulta)
-        btn_layout.addWidget(self.btn_enviar_consulta)
+        btn_add.clicked.connect(self.on_add_book)
+        header_layout.addWidget(btn_add)
         
-        # Botón para consultas rápidas predefinidas
-        self.btn_consultas_rapidas = QPushButton("💡 Consultas Rápidas")
-        self.btn_consultas_rapidas.setStyleSheet("""
+        # Botón de consultas rápidas
+        btn_quick = QPushButton("💡")
+        btn_quick.setToolTip("Consultas Rápidas")
+        btn_quick.setFixedSize(32, 32)
+        btn_quick.setCursor(Qt.PointingHandCursor)
+        btn_quick.setStyleSheet("""
             QPushButton {
                 background-color: #f39c12;
                 color: white;
                 border: none;
-                padding: 8px 12px;
-                border-radius: 5px;
-                font-size: 12px;
+                border-radius: 16px;
+                font-size: 16px;
             }
             QPushButton:hover {
                 background-color: #e67e22;
             }
         """)
-        self.btn_consultas_rapidas.clicked.connect(self.mostrar_consultas_rapidas)
-        btn_layout.addWidget(self.btn_consultas_rapidas)
+        btn_quick.clicked.connect(self.mostrar_consultas_rapidas)
+        header_layout.addWidget(btn_quick)
         
-        btn_layout.addStretch()
-        consulta_layout.addLayout(btn_layout)
+        chat_layout.addWidget(header_frame)
         
-        # Área de respuesta
-        respuesta_label = QLabel("Respuesta:")
-        respuesta_label.setStyleSheet("font-weight: bold; color: #2c3e50; margin-top: 10px;")
-        consulta_layout.addWidget(respuesta_label)
-        
-        self.texto_respuesta = QTextEdit()
-        self.texto_respuesta.setPlaceholderText("La respuesta de la IA aparecerá aquí...")
-        self.texto_respuesta.setReadOnly(True)
-        self.texto_respuesta.setStyleSheet("""
-            QTextEdit {
-                border: 2px solid #bdc3c7;
-                border-radius: 5px;
-                padding: 10px;
-                font-size: 13px;
-                line-height: 1.4;
+        # Área de chat (historial de mensajes)
+        self.chat_history = QListWidget()
+        self.chat_history.setStyleSheet("""
+            QListWidget {
+                background-color: #ffffff;
+                border: none;
+                outline: none;
+            }
+            QListWidget::item {
+                background: transparent;
+                border: none;
+                padding: 0px;
+            }
+            QListWidget::item:hover {
+                background: transparent;
+            }
+            QListWidget::item:selected {
+                background: transparent;
             }
         """)
-        consulta_layout.addWidget(self.texto_respuesta)
+        self.chat_history.setVerticalScrollMode(QListWidget.ScrollPerPixel)
+        self.chat_history.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        chat_layout.addWidget(self.chat_history)
         
-        right_layout.addWidget(consulta_group)
+        # Mensaje de bienvenida
+        self.add_ai_message("¡Hola! Soy tu asistente de biblioteca IA. Puedo ayudarte a encontrar información en tus libros. ¿Qué te gustaría saber?")
         
-        # Configurar splitter
-        splitter.addWidget(left_widget)
-        splitter.addWidget(right_widget)
-        splitter.setSizes([400, 600])
+        # Área de entrada de chat
+        self.chat_input = ChatInputArea()
+        self.chat_input.message_sent.connect(self.on_enviar_consulta_chat)
+        chat_layout.addWidget(self.chat_input)
         
-        layout.addWidget(splitter)
+        main_layout.addWidget(chat_widget)
+        
+        layout.addWidget(main_container)
         
     def create_stats_panel(self):
         """Crear panel de estadísticas compacto"""
         panel = QFrame()
         panel.setStyleSheet("""
             QFrame {
-                background-color: #f8f9fa;
-                border: 1px solid #e9ecef;
-                border-radius: 5px;
-                padding: 8px;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #667eea, stop:1 #764ba2);
+                border-radius: 10px;
+                padding: 15px;
+                margin: 10px 5px;
             }
         """)
         
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Título
+        title = QLabel("📊 Estadísticas")
+        title.setStyleSheet("""
+            font-size: 13px;
+            font-weight: bold;
+            color: white;
+            margin-bottom: 5px;
+        """)
+        layout.addWidget(title)
         
         self.stats_label = QLabel()
-        self.stats_label.setStyleSheet("font-size: 11px; color: #495057;")
+        self.stats_label.setStyleSheet("""
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.95);
+            line-height: 1.6;
+        """)
         self.stats_label.setWordWrap(True)
         layout.addWidget(self.stats_label)
         
         return panel
+
+    def add_user_message(self, text):
+        """Agregar mensaje del usuario al chat"""
+        item = QListWidgetItem()
+        widget = ChatMessageWidget(text, is_user=True)
+        item.setSizeHint(widget.sizeHint())
+        self.chat_history.addItem(item)
+        self.chat_history.setItemWidget(item, widget)
+        self.chat_history.scrollToBottom()
+    
+    def add_ai_message(self, text):
+        """Agregar mensaje de la IA al chat"""
+        item = QListWidgetItem()
+        widget = ChatMessageWidget(text, is_user=False)
+        item.setSizeHint(widget.sizeHint())
+        self.chat_history.addItem(item)
+        self.chat_history.setItemWidget(item, widget)
+        self.chat_history.scrollToBottom()
+    
+    def add_system_message(self, text):
+        """Agregar mensaje del sistema (como mensaje de IA)"""
+        self.add_ai_message(f"ℹ️ {text}")
+    
+    def on_enviar_consulta_chat(self, pregunta):
+        """Manejador para enviar consulta desde el chat"""
+        # Verificar que hay libros cargados
+        libros = self.db_manager.obtener_libros()
+        if not libros:
+            self.add_system_message("No hay libros cargados. Por favor agrega algunos libros PDF antes de hacer consultas.")
+            return
+        
+        # Verificar selección específica
+        if self.libros_consulta and not any(libro['id'] in self.libros_consulta for libro in libros):
+            self.add_system_message("Algunos libros seleccionados ya no están disponibles. Buscando en todos los libros.")
+            self.libros_consulta = None
+            self.combo_ambito.setCurrentText("Todos los libros")
+        
+        # Verificar API key
+        if not config_manager.get_api_key():
+            self.add_system_message("API Key Requerida. Ve a Configuración → IA y agrega tu API Key.")
+            return
+        
+        # Agregar mensaje del usuario
+        self.add_user_message(pregunta)
+        
+        # Deshabilitar entrada durante procesamiento
+        self.chat_input.set_enabled(False)
+        
+        # Crear y ejecutar thread de consulta
+        self.consulta_thread = ConsultaThread(
+            pregunta, 
+            self.db_manager, 
+            self.query_processor, 
+            self.libros_consulta
+        )
+        self.consulta_thread.respuesta_lista.connect(self.actualizar_respuesta_chat)
+        self.consulta_thread.habilitar_boton.connect(self.rehabilitar_chat_input)
+        self.consulta_thread.error_ocurrido.connect(self.mostrar_error_chat)
+        self.consulta_thread.start()
+    
+    def actualizar_respuesta_chat(self, respuesta):
+        """Actualizar con respuesta de IA en el chat"""
+        self.add_ai_message(respuesta)
+    
+    def rehabilitar_chat_input(self):
+        """Rehabilitar entrada de chat"""
+        self.chat_input.set_enabled(True)
+    
+    def mostrar_error_chat(self, error_msg):
+        """Mostrar error en el chat"""
+        self.add_system_message(f"Error: {error_msg}")
+        self.chat_input.set_enabled(True)
 
     def actualizar_lista_libros(self):
         """Actualizar la lista de libros con filtros y ordenamiento"""
@@ -726,6 +949,19 @@ class BibliotecaApp(BaseApp):
     def filtrar_libros(self):
         """Filtrar libros en tiempo real según la búsqueda"""
         self.actualizar_lista_libros()
+    
+    def toggle_books_section(self):
+        """Colapsar/expandir la sección de libros"""
+        self.books_section_visible = not self.books_section_visible
+        
+        if self.books_section_visible:
+            self.books_content.show()
+            self.books_widget.setMaximumHeight(250)
+            self.btn_toggle_books.setText("📚 Tus Libros ▼")
+        else:
+            self.books_content.hide()
+            self.books_widget.setMaximumHeight(40)  # Solo altura del botón
+            self.btn_toggle_books.setText("📚 Tus Libros ▶")
 
     def actualizar_navegacion(self):
         """Actualizar estado de los botones de navegación"""
@@ -833,8 +1069,8 @@ class BibliotecaApp(BaseApp):
         )
         
         if ok and consulta:
-            self.input_pregunta.setText(consulta)
-            self.input_pregunta.setFocus()
+            self.chat_input.input_field.setText(consulta)
+            self.chat_input.input_field.setFocus()
 
     def mostrar_detalles_libro(self, libro_id):
         """Mostrar diálogo con detalles completos del libro"""
@@ -1064,11 +1300,5 @@ class BibliotecaApp(BaseApp):
 
     def actualizar_estadisticas(self):
         """Actualizar las estadísticas en la UI"""
-        stats = self.db_manager.obtener_estadisticas()
-        
-        stats_text = (
-            f"📚 {stats['total_libros']} libros\n"
-            f"📄 {stats['total_fragmentos']} fragmentos\n"
-            f"💬 {stats['total_consultas']} consultas"
-        )
-        self.stats_label.setText(stats_text)
+        # Panel de estadísticas removido - método mantenido para compatibilidad
+        pass
