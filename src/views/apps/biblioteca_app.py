@@ -165,6 +165,41 @@ class ChatInputArea(QWidget):
 
 # ============ END CHAT WIDGETS ============
 
+class HistoryItemWidget(QWidget):
+    """Widget para mostrar un elemento del historial"""
+    def __init__(self, consulta, parent=None):
+        super().__init__(parent)
+        self.consulta = consulta
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(4)
+        
+        # Pregunta (truncada)
+        pregunta = self.consulta['pregunta']
+        if len(pregunta) > 60:
+            pregunta = pregunta[:57] + "..."
+        
+        self.label_pregunta = QLabel(pregunta)
+        self.label_pregunta.setStyleSheet("font-weight: bold; color: #2c3e50; font-size: 12px;")
+        self.label_pregunta.setWordWrap(True)
+        layout.addWidget(self.label_pregunta)
+        
+        # Fecha
+        fecha = self.consulta['fecha'].strftime("%d/%m/%Y %H:%M")
+        self.label_fecha = QLabel(f"📅 {fecha}")
+        self.label_fecha.setStyleSheet("color: #7f8c8d; font-size: 10px;")
+        layout.addWidget(self.label_fecha)
+        
+        # Línea separadora
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        line.setStyleSheet("background-color: #ecf0f1;")
+        layout.addWidget(line)
+
 class ProcesarLibroThread(QThread):
     """Hilo para procesar libros en segundo plano"""
     progreso = pyqtSignal(int)
@@ -467,6 +502,7 @@ class BibliotecaApp(BaseApp):
         self.search_timer.timeout.connect(self.actualizar_lista_libros)
         
         self.setup_ui()
+        self.setup_legal_templates()
         self.actualizar_estadisticas()
         self.actualizar_lista_libros()
         
@@ -481,6 +517,83 @@ class BibliotecaApp(BaseApp):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(15)
+        
+        # Splitter principal para separar Sidebar de Historial y Chat
+        self.main_splitter = QSplitter(Qt.Horizontal)
+        
+        # --- PANEL IZQUIERDO: HISTORIAL ---
+        self.history_panel = QFrame()
+        self.history_panel.setFixedWidth(280)
+        self.history_panel.setStyleSheet("""
+            QFrame {
+                background-color: #f8f9fa;
+                border-right: 1px solid #dee2e6;
+            }
+        """)
+        history_layout = QVBoxLayout(self.history_panel)
+        history_layout.setContentsMargins(10, 10, 10, 10)
+        
+        history_title = QLabel("📜 Historial de Consultas")
+        history_title.setStyleSheet("font-weight: bold; font-size: 14px; color: #2c3e50; margin-bottom: 5px;")
+        history_layout.addWidget(history_title)
+        
+        # Buscador de historial
+        self.history_search = QLineEdit()
+        self.history_search.setPlaceholderText("🔍 Buscar en historial...")
+        self.history_search.setStyleSheet("""
+            QLineEdit {
+                padding: 6px;
+                border: 1px solid #bdc3c7;
+                border-radius: 4px;
+                font-size: 12px;
+                margin-bottom: 5px;
+            }
+        """)
+        self.history_search.textChanged.connect(self.on_history_search_changed)
+        history_layout.addWidget(self.history_search)
+        
+        # Lista de historial
+        self.lista_historial = QListWidget()
+        self.lista_historial.setStyleSheet("""
+            QListWidget {
+                border: none;
+                background-color: transparent;
+            }
+            QListWidget::item {
+                border-bottom: 1px solid #ecf0f1;
+            }
+            QListWidget::item:selected {
+                background-color: #e8f4f8;
+            }
+        """)
+        self.lista_historial.itemClicked.connect(self.on_history_item_clicked)
+        history_layout.addWidget(self.lista_historial)
+        
+        # Botón para limpiar historial
+        self.btn_clear_history = QPushButton("🗑️ Limpiar Historial")
+        self.btn_clear_history.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #e74c3c;
+                border: 1px solid #e74c3c;
+                padding: 5px;
+                border-radius: 4px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #fdf2f2;
+            }
+        """)
+        self.btn_clear_history.clicked.connect(self.on_clear_history)
+        history_layout.addWidget(self.btn_clear_history)
+        
+        self.main_splitter.addWidget(self.history_panel)
+        
+        # --- PANEL DERECHO: CONTENIDO PRINCIPAL ---
+        right_container = QWidget()
+        right_layout = QVBoxLayout(right_container)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
         
         # Contenedor principal con layout vertical
         main_container = QWidget()
@@ -788,7 +901,15 @@ class BibliotecaApp(BaseApp):
         
         main_layout.addWidget(chat_widget)
         
-        layout.addWidget(main_container)
+        main_layout.addWidget(self.chat_input)
+        
+        right_layout.addWidget(main_container)
+        self.main_splitter.addWidget(right_container)
+        
+        layout.addWidget(self.main_splitter)
+        
+        # Cargar historial inicial
+        self.actualizar_lista_historial()
         
     def create_stats_panel(self):
         """Crear panel de estadísticas compacto"""
@@ -883,6 +1004,7 @@ class BibliotecaApp(BaseApp):
         )
         self.consulta_thread.respuesta_lista.connect(self.actualizar_respuesta_chat)
         self.consulta_thread.habilitar_boton.connect(self.rehabilitar_chat_input)
+        self.consulta_thread.habilitar_boton.connect(self.actualizar_lista_historial) # Actualizar historial
         self.consulta_thread.error_ocurrido.connect(self.mostrar_error_chat)
         self.consulta_thread.start()
     
@@ -898,6 +1020,101 @@ class BibliotecaApp(BaseApp):
         """Mostrar error en el chat"""
         self.add_system_message(f"Error: {error_msg}")
         self.chat_input.set_enabled(True)
+
+    def actualizar_lista_historial(self, busqueda=None):
+        """Actualizar la lista de historial desde la BD"""
+        self.lista_historial.clear()
+        historial = self.db_manager.obtener_historial_consultas(busqueda=busqueda)
+        
+        for consulta in historial:
+            item = QListWidgetItem()
+            widget = HistoryItemWidget(consulta)
+            item.setSizeHint(widget.sizeHint())
+            item.setData(Qt.UserRole, consulta['id'])
+            self.lista_historial.addItem(item)
+            self.lista_historial.setItemWidget(item, widget)
+
+    def on_history_search_changed(self, text):
+        """Manejador para búsqueda en el historial"""
+        self.actualizar_lista_historial(busqueda=text)
+
+    def on_history_item_clicked(self, item):
+        """Manejador para cuando se hace click en un item del historial"""
+        consulta_id = item.data(Qt.UserRole)
+        # Buscar la consulta en el historial cargado
+        historial = self.db_manager.obtener_historial_consultas()
+        consulta = next((c for c in historial if c['id'] == consulta_id), None)
+        
+        if consulta:
+            # Limpiar chat y cargar esta conversación
+            self.chat_history.clear()
+            self.add_user_message(consulta['pregunta'])
+            self.add_ai_message(consulta['respuesta'])
+            
+            # Si hay libros referenciados, podríamos seleccionarlos
+            if consulta['libros_referenciados']:
+                self.libros_consulta = consulta['libros_referenciados']
+                self.combo_ambito.setCurrentText(f"Seleccionados ({len(self.libros_consulta)})")
+
+    def on_clear_history(self):
+        """Limpiar todo el historial (con confirmación)"""
+        reply = QMessageBox.question(
+            self, "Confirmar", "¿Estás seguro de que deseas eliminar todo el historial de consultas?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # Por ahora eliminamos uno por uno o implementamos un clear_all en db_manager
+            historial = self.db_manager.obtener_historial_consultas()
+            for c in historial:
+                self.db_manager.eliminar_consulta(c['id'])
+            self.actualizar_lista_historial()
+            QMessageBox.information(self, "Éxito", "Historial eliminado correctamente.")
+
+    def setup_legal_templates(self):
+        """Configurar plantillas de análisis jurídico"""
+        # Añadir un botón de plantillas al área de chat
+        self.templates_btn = QPushButton("📋 Plantillas Jurídicas")
+        self.templates_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f39c12;
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                border-radius: 5px;
+                font-weight: bold;
+                margin-bottom: 5px;
+            }
+            QPushButton:hover {
+                background-color: #e67e22;
+            }
+        """)
+        
+        # Crear menú de plantillas
+        from PyQt5.QtWidgets import QMenu
+        self.templates_menu = QMenu(self)
+        
+        templates = [
+            ("Resumen de Hechos", "Realiza un resumen ejecutivo de los hechos más relevantes encontrados en el documento."),
+            ("Identificación de Riesgos", "Identifica posibles riesgos procesales o legales mencionados en el texto."),
+            ("Fundamentación Legal", "Extrae y analiza la fundamentación legal (leyes, artículos, jurisprudencia) citada."),
+            ("Extracción de Entidades", "Extrae una lista de las partes involucradas, fechas clave y montos mencionados.")
+        ]
+        
+        for nombre, prompt in templates:
+            action = self.templates_menu.addAction(nombre)
+            action.triggered.connect(lambda checked, p=prompt: self.aplicar_plantilla(p))
+        
+        self.templates_btn.setMenu(self.templates_menu)
+        
+        # Insertar el botón antes del chat_input
+        # Necesitamos encontrar el layout correcto
+        self.chat_input.layout().insertWidget(0, self.templates_btn)
+
+    def aplicar_plantilla(self, prompt):
+        """Aplicar una plantilla al chat"""
+        self.chat_input.input_field.setText(prompt)
+        self.chat_input.input_field.setFocus()
 
     def actualizar_lista_libros(self):
         """Actualizar la lista de libros con filtros y ordenamiento"""

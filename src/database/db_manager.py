@@ -661,6 +661,56 @@ class DatabaseManager:
             self._libros_cache = None  # Invalida cache
             session.close()
     
+    def obtener_historial_consultas(self, limite: int = 50, busqueda: str = None) -> List[Dict]:
+        """Obtener historial de consultas guardadas"""
+        session = self.get_session()
+        try:
+            query = session.query(Consulta)
+            
+            if busqueda:
+                query = query.filter(
+                    sa.or_(
+                        Consulta.pregunta.ilike(f"%{busqueda}%"),
+                        Consulta.respuesta.ilike(f"%{busqueda}%")
+                    )
+                )
+            
+            consultas = query.order_by(Consulta.fecha_consulta.desc()).limit(limite).all()
+            
+            return [
+                {
+                    'id': c.id,
+                    'pregunta': c.pregunta,
+                    'respuesta': c.respuesta,
+                    'fecha': c.fecha_consulta,
+                    'libros_referenciados': c.libros_referenciados,
+                    'modelo': c.modelo_utilizado
+                }
+                for c in consultas
+            ]
+        except Exception as e:
+            print(f"❌ Error obteniendo historial: {e}")
+            return []
+        finally:
+            session.close()
+
+    def eliminar_consulta(self, consulta_id: int) -> bool:
+        """Eliminar una consulta específica del historial"""
+        session = self.get_session()
+        try:
+            consulta = session.query(Consulta).filter(Consulta.id == consulta_id).first()
+            if consulta:
+                session.delete(consulta)
+                session.commit()
+                return True
+            return False
+        except Exception as e:
+            session.rollback()
+            print(f"❌ Error eliminando consulta: {e}")
+            return False
+        finally:
+            session.close()
+
     def probar_conexion(self) -> bool:
         """Probar la conexión a la base de datos"""
         try:
