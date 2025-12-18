@@ -18,7 +18,7 @@ class QueryProcessor:
         self.modelo_embeddings = config_manager.get_modelo_embeddings()
     
     def encontrar_fragmentos_relevantes(self, pregunta: str, fragmentos: List[Dict]) -> Tuple[List[Dict], List[int]]:
-        """Encontrar los fragmentos más relevantes para la pregunta"""
+        """Encontrar los fragmentos más relevantes para la pregunta usando operaciones vectorizadas"""
         try:
             print(f"🔍 Buscando fragmentos relevantes para: '{pregunta[:50]}...'")
             
@@ -28,39 +28,39 @@ class QueryProcessor:
                 print("❌ No se pudo generar embedding para la pregunta")
                 return fragmentos[:self.top_k], []
             
+            # Filtrar fragmentos que tienen embedding
+            fragmentos_con_embedding = [f for f in fragmentos if f.get('embedding')]
+            if not fragmentos_con_embedding:
+                print("⚠️ No hay fragmentos con embeddings para comparar")
+                return [], []
+                
+            print(f"📊 Analizando {len(fragmentos_con_embedding)} fragmentos con embeddings")
+            
+            # Convertir embeddings a matriz numpy para cálculo vectorizado
+            embeddings_matrix = np.array([f['embedding'] for f in fragmentos_con_embedding])
+            embedding_pregunta_arr = np.array([embedding_pregunta])
+            
+            # Calcular similitudes en lote
+            similitudes = cosine_similarity(embedding_pregunta_arr, embeddings_matrix)[0]
+            
             fragmentos_con_similitud = []
             libros_referenciados = set()
             
-            # Filtrar fragmentos que tienen embedding
-            fragmentos_con_embedding = [f for f in fragmentos if f.get('embedding')]
-            print(f"📊 Analizando {len(fragmentos_con_embedding)} fragmentos con embeddings")
-            
-            for fragmento in fragmentos_con_embedding:
-                try:
-                    similitud = cosine_similarity(
-                        [embedding_pregunta],
-                        [fragmento['embedding']]
-                    )[0][0]
-                    
-                    # Solo considerar fragmentos por encima del umbral
-                    if similitud >= self.umbral_similitud:
-                        fragmentos_con_similitud.append({
-                            **fragmento,
-                            'similitud': similitud
-                        })
-                        if fragmento.get('libro_id'):
-                            libros_referenciados.add(fragmento['libro_id'])
-                except Exception as e:
-                    print(f"⚠️ Error calculando similitud para fragmento {fragmento.get('id')}: {e}")
-                    continue
+            for i, similitud in enumerate(similitudes):
+                if similitud >= self.umbral_similitud:
+                    frag = fragmentos_con_embedding[i]
+                    fragmentos_con_similitud.append({
+                        **frag,
+                        'similitud': float(similitud)
+                    })
+                    if frag.get('libro_id'):
+                        libros_referenciados.add(frag['libro_id'])
             
             # Ordenar por similitud y tomar los top_k
             fragmentos_con_similitud.sort(key=lambda x: x.get('similitud', 0), reverse=True)
             fragmentos_finales = fragmentos_con_similitud[:self.top_k]
             
             print(f"✅ Encontrados {len(fragmentos_finales)} fragmentos relevantes")
-            print(f"📚 Libros referenciados: {list(libros_referenciados)}")
-            
             return fragmentos_finales, list(libros_referenciados)
             
         except Exception as e:

@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (QVBoxLayout, QHBoxLayout, QPushButton, QListWidget,
                              QDialog, QFormLayout, QDialogButtonBox, QListWidgetItem,
                              QComboBox, QScrollArea, QSizePolicy, QSpacerItem, QInputDialog,
                              QCheckBox)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont, QIcon
 from typing import List, Dict, Tuple
 from datetime import datetime
@@ -461,6 +461,11 @@ class BibliotecaApp(BaseApp):
         self.libros_filtrados = []
         self.indice_actual = -1
         
+        # Timer para debouncing de búsqueda
+        self.search_timer = QTimer()
+        self.search_timer.setSingleShot(True)
+        self.search_timer.timeout.connect(self.actualizar_lista_libros)
+        
         self.setup_ui()
         self.actualizar_estadisticas()
         self.actualizar_lista_libros()
@@ -545,7 +550,7 @@ class BibliotecaApp(BaseApp):
                 border-color: #3498db;
             }
         """)
-        self.barra_busqueda.textChanged.connect(self.filtrar_libros)
+        self.barra_busqueda.textChanged.connect(self.on_search_text_changed)
         search_layout.addWidget(self.barra_busqueda)
         
         # ComboBox para ordenamiento
@@ -946,8 +951,12 @@ class BibliotecaApp(BaseApp):
         # Actualizar navegación
         self.actualizar_navegacion()
 
+    def on_search_text_changed(self):
+        """Manejador para cambio de texto con debouncing"""
+        self.search_timer.start(300)  # 300ms de delay
+
     def filtrar_libros(self):
-        """Filtrar libros en tiempo real según la búsqueda"""
+        """Filtrar libros en tiempo real según la búsqueda (ahora vía timer)"""
         self.actualizar_lista_libros()
     
     def toggle_books_section(self):

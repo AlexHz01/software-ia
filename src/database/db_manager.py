@@ -75,6 +75,8 @@ class DatabaseManager:
         self.tipo_bd = config_manager.get_tipo_bd()
         self.engine = self._crear_engine()
         self.Session = scoped_session(sessionmaker(bind=self.engine))
+        self._libros_cache = None
+        self._last_cache_update = None
         self.init_database()
     
     def _crear_engine(self):
@@ -252,12 +254,16 @@ class DatabaseManager:
         finally:
             session.close()
     
-    def obtener_libros(self) -> List[Dict]:
-        """Obtener todos los libros"""
+    def obtener_libros(self, force_refresh: bool = False) -> List[Dict]:
+        """Obtener todos los libros (con cache simple)"""
+        if not force_refresh and self._libros_cache is not None:
+            # Verificar si el cache es reciente (opcional, aquí lo usamos siempre hasta que se invalide)
+            return self._libros_cache
+
         session = self.get_session()
         try:
             libros = session.query(Libro).order_by(Libro.fecha_procesado.desc()).all()
-            return [
+            self._libros_cache = [
                 {
                     'id': libro.id,
                     'titulo': libro.titulo,
@@ -272,6 +278,8 @@ class DatabaseManager:
                 }
                 for libro in libros
             ]
+            self._last_cache_update = datetime.utcnow()
+            return self._libros_cache
         except Exception as e:
             print(f"❌ Error obteniendo libros: {e}")
             return []
@@ -650,6 +658,7 @@ class DatabaseManager:
             print(f"❌ Error eliminando libro: {e}")
             return False
         finally:
+            self._libros_cache = None  # Invalida cache
             session.close()
     
     def probar_conexion(self) -> bool:

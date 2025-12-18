@@ -42,7 +42,7 @@ class ConfigManager:
                 "formatear_automaticamente": True
             },
             "database": {  # NUEVA SECCIÓN PARA CONFIGURACIÓN DE BD
-                "tipo": "postgresql",  # postgresql o sqlite
+                "tipo": "sqlite",  # postgresql o sqlite
                 "postgresql": {
                     "host": "localhost",
                     "puerto": 5432,
