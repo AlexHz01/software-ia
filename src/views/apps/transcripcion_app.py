@@ -99,11 +99,21 @@ class TranscripcionWorker(QThread):
             
             # Guardar archivo
             self.progress_updated.emit(95, "Guardando archivo...")
+            
+            # Obtener ruta de almacenamiento configurada por el usuario
+            # Si no está configurada, usar './data' por defecto
+            ruta_base_datos = config_manager.get("almacenamiento", "ruta_datos", "./data")
+            
+            # Asegurar que la carpeta de transcripciones exista dentro de la ruta configurada
+            ruta_transcripciones = os.path.join(ruta_base_datos, "transcripciones")
+            os.makedirs(ruta_transcripciones, exist_ok=True)
+            
             nombre_base = os.path.basename(self.archivo_path)
             nombre_sin_ext = os.path.splitext(nombre_base)[0]
-            archivo_salida = f"{nombre_sin_ext}_transcripcion.txt"
+            archivo_salida_nombre = f"{nombre_sin_ext}_transcripcion.txt"
+            archivo_salida_full = os.path.join(ruta_transcripciones, archivo_salida_nombre)
             
-            with open(archivo_salida, "w", encoding="utf-8") as f:
+            with open(archivo_salida_full, "w", encoding="utf-8") as f:
                 f.write(texto_final)
             
             # Limpiar temporales
@@ -114,7 +124,7 @@ class TranscripcionWorker(QThread):
                 os.rmdir(temp_dir)
             
             self.progress_updated.emit(100, "¡Transcripción completada!")
-            self.finished_success.emit(archivo_salida)
+            self.finished_success.emit(archivo_salida_full)
             
         except Exception as e:
             self.finished_error.emit(f"Error: {str(e)}")
