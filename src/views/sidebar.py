@@ -19,7 +19,7 @@ class Sidebar(QWidget):
         
     def setup_ui(self):
         """Configurar la interfaz de la barra lateral"""
-        self.setFixedWidth(280)
+        self.setFixedWidth(200)
         self.setStyleSheet(get_sidebar_style())
         
         layout = QVBoxLayout(self)
@@ -100,7 +100,7 @@ class Sidebar(QWidget):
     def create_sidebar_header(self):
         """Crear el header de la barra lateral"""
         header = QFrame()
-        header.setFixedHeight(120)
+        header.setFixedHeight(80)
         header.setStyleSheet("""
             QFrame {
                 background-color: #2c3e50;
@@ -109,14 +109,14 @@ class Sidebar(QWidget):
         """)
         
         layout = QVBoxLayout(header)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(15, 10, 15, 10)
         
         # Logo y título
         logo_layout = QHBoxLayout()
         
         # Logo
-        logo_label = QLabel("📚 IDE")
-        logo_label.setStyleSheet("font-size: 32px;")
+        logo_label = QLabel("📚")
+        logo_label.setStyleSheet("font-size: 24px;")
         logo_layout.addWidget(logo_label)
         
         title_layout = QVBoxLayout()
@@ -124,15 +124,15 @@ class Sidebar(QWidget):
         title.setStyleSheet("""
             QLabel {
                 color: white;
-                font-size: 20px;
+                font-size: 16px;
                 font-weight: bold;
             }
         """)
-        subtitle = QLabel("Biblioteca Inteligente")
+        subtitle = QLabel("Biblioteca")
         subtitle.setStyleSheet("""
             QLabel {
                 color: #bdc3c7;
-                font-size: 12px;
+                font-size: 10px;
             }
         """)
         
@@ -147,7 +147,7 @@ class Sidebar(QWidget):
     def create_sidebar_footer(self):
         """Crear el footer de la barra lateral"""
         footer = QFrame()
-        footer.setFixedHeight(80)
+        footer.setFixedHeight(50)
         footer.setStyleSheet("""
             QFrame {
                 background-color: #2c3e50;
@@ -156,7 +156,7 @@ class Sidebar(QWidget):
         """)
         
         layout = QVBoxLayout(footer)
-        layout.setContentsMargins(20, 15, 20, 15)
+        layout.setContentsMargins(15, 5, 15, 5)
         
         # Información de versión
         version_label = QLabel("v1.0.0")
@@ -212,8 +212,8 @@ class Sidebar(QWidget):
                 color: #ecf0f1;
                 border: none;
                 text-align: left;
-                padding: 12px 15px;
-                font-size: 14px;
+                padding: 8px 12px;
+                font-size: 13px;
                 border-radius: 5px;
             }
             QPushButton:hover {

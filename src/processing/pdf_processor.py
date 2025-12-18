@@ -67,13 +67,16 @@ class PDFProcessor:
             # Fallback cuando tiktoken no está disponible
             return len(texto.split()) * 4 // 3 if texto else 0
     
-    def extraer_texto_pdf(self, pdf_path: str) -> Tuple[List[Dict], int]:
+    def extraer_texto_pdf(self, pdf_path: str) -> Tuple[List[Dict], int, List[Dict]]:
         """Extraer texto de un PDF y dividirlo en fragmentos optimizados"""
         try:
             with open(pdf_path, 'rb') as file:
                 pdf_reader = PyPDF2.PdfReader(file)
                 total_paginas = len(pdf_reader.pages)
                 fragmentos = []
+                
+                # Extraer índice primero
+                indice = self.extraer_indice_ia(pdf_path)
                 
                 max_fragmentos_por_pagina = config_manager.get(
                     "biblioteca_ia", "procesamiento.max_fragmentos_por_pagina", 10
@@ -105,11 +108,86 @@ class PDFProcessor:
                         fragmentos.extend(fragmentos_pagina)
                 
                 print(f"✅ Extraídos {len(fragmentos)} fragmentos de {total_paginas} páginas")
-                return fragmentos, total_paginas
+                return fragmentos, total_paginas, indice
                 
         except Exception as e:
             print(f"❌ Error procesando PDF {pdf_path}: {e}")
-            return [], 0
+            return [], 0, []
+
+    def extraer_indice_ia(self, pdf_path: str) -> List[Dict]:
+        """Extraer el índice del libro usando IA analizando las primeras páginas"""
+        try:
+            if not self.openai_available:
+                return []
+                
+            print(f"🔍 Intentando extraer índice de: {os.path.basename(pdf_path)}")
+            
+            with open(pdf_path, 'rb') as file:
+                pdf_reader = PyPDF2.PdfReader(file)
+                # Analizar las primeras 10 páginas para buscar el índice
+                paginas_analizar = min(10, len(pdf_reader.pages))
+                texto_analisis = ""
+                
+                for i in range(paginas_analizar):
+                    texto_analisis += f"--- PÁGINA {i+1} ---\n"
+                    texto_analisis += pdf_reader.pages[i].extract_text() + "\n"
+            
+            prompt = f"""
+            Analiza el siguiente texto extraído de las primeras páginas de un libro jurídico y extrae el ÍNDICE o TABLA DE CONTENIDO.
+            Devuelve ÚNICAMENTE un objeto JSON con una lista de capítulos. Cada capítulo debe tener 'titulo' y 'pagina'.
+            Si no encuentras un índice claro, devuelve una lista vacía [].
+            
+            Formato esperado:
+            [
+                {{"titulo": "Introducción", "pagina": 5}},
+                {{"titulo": "Capítulo I: El Derecho Civil", "pagina": 15}}
+            ]
+            
+            Texto a analizar:
+            {texto_analisis[:8000]}
+            """
+            
+            if OPENAI_NEW:
+                response = self.openai_client.chat.completions.create(
+                    model=config_manager.get_modelo(),
+                    messages=[
+                        {"role": "system", "content": "Eres un experto en análisis de documentos jurídicos. Tu tarea es extraer índices de libros de forma estructurada."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={ "type": "json_object" } if "gpt-4" in config_manager.get_modelo() else None
+                )
+                contenido = response.choices[0].message.content
+            else:
+                import openai as openai_old
+                openai_old.api_key = self.api_key
+                response = openai_old.ChatCompletion.create(
+                    model=config_manager.get_modelo(),
+                    messages=[
+                        {"role": "system", "content": "Eres un experto en análisis de documentos jurídicos."},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                contenido = response['choices'][0]['message']['content']
+            
+            # Limpiar y parsear JSON
+            import json
+            # Si no es JSON nativo (gpt-3.5), intentar extraerlo
+            if "```json" in contenido:
+                contenido = contenido.split("```json")[1].split("```")[0]
+            elif "```" in contenido:
+                contenido = contenido.split("```")[1].split("```")[0]
+            
+            data = json.loads(contenido)
+            indice = data.get('capitulos', data) if isinstance(data, dict) else data
+            
+            if isinstance(indice, list):
+                print(f"✅ Índice extraído: {len(indice)} capítulos encontrados")
+                return indice
+            return []
+            
+        except Exception as e:
+            print(f"⚠️ No se pudo extraer el índice: {e}")
+            return []
     
     def _limpiar_texto(self, texto: str) -> str:
         """Limpiar y normalizar texto"""

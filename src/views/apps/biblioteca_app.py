@@ -214,11 +214,11 @@ class ProcesarLibroThread(QThread):
 
     def run(self):
         try:
-            self.mensaje.emit("📖 Extrayendo texto del PDF...")
+            self.mensaje.emit("📖 Extrayendo texto e índice del PDF...")
             self.progreso.emit(10)
             
-            # Extraer texto y fragmentos
-            fragmentos, total_paginas = self.pdf_processor.extraer_texto_pdf(self.file_path)
+            # Extraer texto, fragmentos e índice
+            fragmentos, total_paginas, indice = self.pdf_processor.extraer_texto_pdf(self.file_path)
             
             if not fragmentos:
                 self.terminado.emit(False, "No se pudo extraer texto del PDF o el PDF está vacío")
@@ -229,9 +229,17 @@ class ProcesarLibroThread(QThread):
             
             # Crear entrada en base de datos
             titulo = os.path.basename(self.file_path).replace('.pdf', '').replace('_', ' ')
+            
+            # Guardar índice en metadatos
+            metadata = {
+                'indice': indice,
+                'fecha_extraccion_indice': datetime.now().isoformat()
+            }
+            
             libro_id = self.db_manager.agregar_libro(
                 titulo=titulo,
-                total_paginas=total_paginas
+                total_paginas=total_paginas,
+                metadata=metadata
             )
             
             self.mensaje.emit("🧮 Generando embeddings...")
