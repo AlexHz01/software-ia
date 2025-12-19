@@ -59,17 +59,19 @@ def main():
     # Configurar manejador de excepciones
     sys.excepthook = handle_exception
     
+    # Configurar atributos de alta resolución ANTES de crear la aplicación
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    
     # Crear aplicación Qt
     app = QApplication(sys.argv)
     
     # Configurar propiedades de la aplicación
     app.setApplicationName("Sistema Biblioteca IA")
     app.setApplicationVersion("1.0.0")
-    app.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-    app.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
     
-    # Configurar fuente global
-    font = QFont("Segoe UI", 10)
+    # Configurar fuente global - Aumentada para mejor legibilidad en 1080p
+    font = QFont("Segoe UI", 11)
     app.setFont(font)
     
     try:

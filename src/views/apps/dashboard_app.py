@@ -16,6 +16,11 @@ class DashboardApp(BaseApp):
     def __init__(self):
         super().__init__()
         self.db_manager = DatabaseManager()
+        
+        # Factor de escala
+        from views.styles import get_scale_factor
+        self.scale_factor = get_scale_factor(self)
+        
         self.setup_ui()
         self.load_real_data()
         
@@ -40,30 +45,30 @@ class DashboardApp(BaseApp):
         header_layout = QHBoxLayout()
         
         title = QLabel("📊 Dashboard del Sistema")
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 24px;
+        title.setStyleSheet(f"""
+            QLabel {{
+                font-size: {int(28 * self.scale_factor)}px;
                 font-weight: bold;
                 color: #2c3e50;
-            }
+            }}
         """)
         header_layout.addWidget(title)
         
         header_layout.addStretch()
         
         self.btn_refresh = QPushButton("🔄 Actualizar")
-        self.btn_refresh.setStyleSheet("""
-            QPushButton {
+        self.btn_refresh.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #3498db;
                 color: white;
                 border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
+                padding: {int(8 * self.scale_factor)}px {int(16 * self.scale_factor)}px;
+                border-radius: {int(4 * self.scale_factor)}px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #2980b9;
-            }
+            }}
         """)
         self.btn_refresh.clicked.connect(self.load_real_data)
         header_layout.addWidget(self.btn_refresh)
@@ -126,12 +131,12 @@ class DashboardApp(BaseApp):
             QFrame {{
                 background-color: white;
                 border: 1px solid #ddd;
-                border-radius: 8px;
-                padding: 10px;
-                min-height: 50px;
+                border-radius: {int(8 * self.scale_factor)}px;
+                padding: {int(10 * self.scale_factor)}px;
+                min-height: {int(50 * self.scale_factor)}px;
             }}
             QFrame:hover {{
-                border: 1px solid {color};
+                border: 1px solid {{color}};
                 background-color: #f8f9fa;
             }}
         """)
@@ -140,12 +145,12 @@ class DashboardApp(BaseApp):
         
         # Título
         title_label = QLabel(title)
-        title_label.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
+        title_label.setStyleSheet(f"""
+            QLabel {{
+                font-size: {int(16 * self.scale_factor)}px;
                 color: #7f8c8d;
                 font-weight: bold;
-            }
+            }}
         """)
         layout.addWidget(title_label)
         
@@ -153,10 +158,10 @@ class DashboardApp(BaseApp):
         value_label = QLabel(value)
         value_label.setStyleSheet(f"""
             QLabel {{
-                font-size: 28px;
+                font-size: {int(32 * self.scale_factor)}px;
                 font-weight: bold;
-                color: {color};
-                padding: 5px 0px;
+                color: {{color}};
+                padding: {int(5 * self.scale_factor)}px 0px;
             }}
         """)
         value_label.setObjectName("value")
@@ -164,11 +169,11 @@ class DashboardApp(BaseApp):
         
         # Subtítulo (dinámico)
         subtitle_label = QLabel(subtitle)
-        subtitle_label.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
+        subtitle_label.setStyleSheet(f"""
+            QLabel {{
+                font-size: {int(14 * self.scale_factor)}px;
                 color: #95a5a6;
-            }
+            }}
         """)
         subtitle_label.setObjectName("subtitle")
         layout.addWidget(subtitle_label)
@@ -180,15 +185,15 @@ class DashboardApp(BaseApp):
         """Crear sección de gráficos con datos reales"""
         section = QGroupBox("📈 Estadísticas de Uso")
         section.setStyleSheet("""
-            QGroupBox {
+            QGroupBox {{
                 font-weight: bold;
                 border: 1px solid #bdc3c7;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 15px;
+                border-radius: {int(8 * self.scale_factor)}px;
+                margin-top: {int(10 * self.scale_factor)}px;
+                padding-top: {int(15 * self.scale_factor)}px;
                 background-color: white;
-                min-width: 400px;
-            }
+                min-width: {int(400 * self.scale_factor)}px;
+            }}
             QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 10px;
@@ -212,13 +217,13 @@ class DashboardApp(BaseApp):
         """Gráfico de consultas por día"""
         chart = QFrame()
         chart.setStyleSheet("""
-            QFrame {
+            QFrame {{
                 background-color: white;
                 border: 1px solid #ecf0f1;
-                border-radius: 6px;
-                padding: 15px;
-                margin: 5px;
-            }
+                border-radius: {int(6 * self.scale_factor)}px;
+                padding: {int(15 * self.scale_factor)}px;
+                margin: {int(5 * self.scale_factor)}px;
+            }}
         """)
         
         layout = QVBoxLayout(chart)
@@ -226,7 +231,7 @@ class DashboardApp(BaseApp):
         title_label = QLabel("📊 Consultas por Día (Última Semana)")
         title_label.setStyleSheet("""
             QLabel {
-                font-size: 14px;
+                font-size: 16px;
                 font-weight: bold;
                 color: #2c3e50;
                 padding-bottom: 10px;
@@ -243,13 +248,13 @@ class DashboardApp(BaseApp):
         """Gráfico de libros por estado"""
         chart = QFrame()
         chart.setStyleSheet("""
-            QFrame {
+            QFrame {{
                 background-color: white;
                 border: 1px solid #ecf0f1;
-                border-radius: 6px;
-                padding: 15px;
-                margin: 5px;
-            }
+                border-radius: {int(6 * self.scale_factor)}px;
+                padding: {int(15 * self.scale_factor)}px;
+                margin: {int(5 * self.scale_factor)}px;
+            }}
         """)
         
         layout = QVBoxLayout(chart)
@@ -257,7 +262,7 @@ class DashboardApp(BaseApp):
         title_label = QLabel("📚 Libros por Estado")
         title_label.setStyleSheet("""
             QLabel {
-                font-size: 14px;
+                font-size: 16px;
                 font-weight: bold;
                 color: #2c3e50;
                 padding-bottom: 10px;
@@ -274,15 +279,15 @@ class DashboardApp(BaseApp):
         """Crear sección de actividad reciente con datos reales"""
         section = QGroupBox("🕒 Actividad Reciente")
         section.setStyleSheet("""
-            QGroupBox {
+            QGroupBox {{
                 font-weight: bold;
                 border: 1px solid #bdc3c7;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 15px;
+                border-radius: {int(8 * self.scale_factor)}px;
+                margin-top: {int(10 * self.scale_factor)}px;
+                padding-top: {int(15 * self.scale_factor)}px;
                 background-color: white;
-                min-width: 350px;
-            }
+                min-width: {int(350 * self.scale_factor)}px;
+            }}
             QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 10px;
@@ -315,26 +320,26 @@ class DashboardApp(BaseApp):
         """Crear un ítem de actividad"""
         item = QFrame()
         item.setStyleSheet("""
-            QFrame {
+            QFrame {{
                 background-color: #f8f9fa;
                 border: 1px solid #ecf0f1;
-                border-radius: 6px;
-                padding: 10px;
-                margin: 2px;
-            }
+                border-radius: {int(6 * self.scale_factor)}px;
+                padding: {int(10 * self.scale_factor)}px;
+                margin: {int(2 * self.scale_factor)}px;
+            }}
         """)
         
         layout = QHBoxLayout(item)
         
         icon_label = QLabel(icon)
-        icon_label.setFixedWidth(30)
+        icon_label.setFixedWidth(int(30 * self.scale_factor))
         
         text_label = QLabel(text)
-        text_label.setStyleSheet("font-size: 13px; color: #2c3e50;")
+        text_label.setStyleSheet(f"font-size: {int(15 * self.scale_factor)}px; color: #2c3e50;")
         text_label.setWordWrap(True)
         
         time_label = QLabel(time)
-        time_label.setStyleSheet("font-size: 11px; color: #95a5a6;")
+        time_label.setStyleSheet(f"font-size: {int(13 * self.scale_factor)}px; color: #95a5a6;")
         time_label.setAlignment(Qt.AlignRight)
         
         layout.addWidget(icon_label)
@@ -463,29 +468,29 @@ class DashboardApp(BaseApp):
         bar_container = QHBoxLayout()
         
         label_widget = QLabel(label)
-        label_widget.setFixedWidth(80)
-        label_widget.setStyleSheet("font-size: 11px; color: #7f8c8d;")
+        label_widget.setFixedWidth(int(80 * self.scale_factor))
+        label_widget.setStyleSheet(f"font-size: {int(11 * self.scale_factor)}px; color: #7f8c8d;")
         
         bar = QProgressBar()
         percentage = min(int((value / max_value) * 100), 100) if max_value > 0 else 0
         bar.setValue(percentage)
         bar.setTextVisible(False)
         bar.setStyleSheet("""
-            QProgressBar {
+            QProgressBar {{
                 border: 1px solid #bdc3c7;
-                border-radius: 3px;
+                border-radius: {int(3 * self.scale_factor)}px;
                 background-color: #ecf0f1;
-                height: 15px;
-            }
-            QProgressBar::chunk {
+                height: {int(15 * self.scale_factor)}px;
+            }}
+            QProgressBar::chunk {{
                 background-color: #3498db;
-                border-radius: 2px;
-            }
+                border-radius: {int(2 * self.scale_factor)}px;
+            }}
         """)
         
         value_label = QLabel(str(value))
-        value_label.setStyleSheet("font-size: 11px; color: #2c3e50; font-weight: bold;")
-        value_label.setFixedWidth(30)
+        value_label.setStyleSheet(f"font-size: {int(11 * self.scale_factor)}px; color: #2c3e50; font-weight: bold;")
+        value_label.setFixedWidth(int(30 * self.scale_factor))
         
         bar_container.addWidget(label_widget)
         bar_container.addWidget(bar)

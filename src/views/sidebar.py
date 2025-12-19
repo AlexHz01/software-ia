@@ -12,6 +12,11 @@ class Sidebar(QWidget):
         super().__init__()
         self.nav_controller = nav_controller
         self.app_buttons = {}
+        
+        # Factor de escala
+        from views.styles import get_scale_factor
+        self.scale_factor = get_scale_factor(self)
+        
         self.setup_ui()
         
         # CONECTAR SEÑAL para actualizar cuando se registren apps
@@ -19,7 +24,7 @@ class Sidebar(QWidget):
         
     def setup_ui(self):
         """Configurar la interfaz de la barra lateral"""
-        self.setFixedWidth(200)
+        self.setFixedWidth(int(240 * self.scale_factor))
         self.setStyleSheet(get_sidebar_style())
         
         layout = QVBoxLayout(self)
@@ -44,24 +49,24 @@ class Sidebar(QWidget):
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
+        scroll_area.setStyleSheet(f"""
+            QScrollArea {{
                 border: none;
                 background-color: #34495e;
-            }
-            QScrollBar:vertical {
+            }}
+            QScrollBar:vertical {{
                 background-color: #2c3e50;
-                width: 10px;
+                width: {int(10 * self.scale_factor)}px;
                 margin: 0px;
-            }
-            QScrollBar::handle:vertical {
+            }}
+            QScrollBar::handle:vertical {{
                 background-color: #46627f;
-                border-radius: 5px;
-                min-height: 20px;
-            }
-            QScrollBar::handle:vertical:hover {
+                border-radius: {int(5 * self.scale_factor)}px;
+                min-height: {int(20 * self.scale_factor)}px;
+            }}
+            QScrollBar::handle:vertical:hover {{
                 background-color: #5d7a97;
-            }
+            }}
         """)
         
         # Widget contenedor de aplicaciones
@@ -72,13 +77,13 @@ class Sidebar(QWidget):
         
         # Título de la sección
         section_title = QLabel("APLICACIONES")
-        section_title.setStyleSheet("""
-            QLabel {
+        section_title.setStyleSheet(f"""
+            QLabel {{
                 color: #95a5a6;
-                font-size: 11px;
+                font-size: {int(13 * self.scale_factor)}px;
                 font-weight: bold;
-                padding: 10px 5px 5px 5px;
-            }
+                padding: {int(10 * self.scale_factor)}px {int(5 * self.scale_factor)}px;
+            }}
         """)
         self.apps_layout.addWidget(section_title)
         
@@ -100,12 +105,12 @@ class Sidebar(QWidget):
     def create_sidebar_header(self):
         """Crear el header de la barra lateral"""
         header = QFrame()
-        header.setFixedHeight(80)
-        header.setStyleSheet("""
-            QFrame {
+        header.setFixedHeight(int(80 * self.scale_factor))
+        header.setStyleSheet(f"""
+            QFrame {{
                 background-color: #2c3e50;
                 border-bottom: 1px solid #46627f;
-            }
+            }}
         """)
         
         layout = QVBoxLayout(header)
@@ -116,24 +121,24 @@ class Sidebar(QWidget):
         
         # Logo
         logo_label = QLabel("📚")
-        logo_label.setStyleSheet("font-size: 24px;")
+        logo_label.setStyleSheet(f"font-size: {int(24 * self.scale_factor)}px;")
         logo_layout.addWidget(logo_label)
         
         title_layout = QVBoxLayout()
         title = QLabel("Sistema IA")
-        title.setStyleSheet("""
-            QLabel {
+        title.setStyleSheet(f"""
+            QLabel {{
                 color: white;
-                font-size: 16px;
+                font-size: {int(18 * self.scale_factor)}px;
                 font-weight: bold;
-            }
+            }}
         """)
         subtitle = QLabel("Biblioteca")
-        subtitle.setStyleSheet("""
-            QLabel {
+        subtitle.setStyleSheet(f"""
+            QLabel {{
                 color: #bdc3c7;
-                font-size: 10px;
-            }
+                font-size: {int(12 * self.scale_factor)}px;
+            }}
         """)
         
         title_layout.addWidget(title)
@@ -147,12 +152,12 @@ class Sidebar(QWidget):
     def create_sidebar_footer(self):
         """Crear el footer de la barra lateral"""
         footer = QFrame()
-        footer.setFixedHeight(50)
-        footer.setStyleSheet("""
-            QFrame {
+        footer.setFixedHeight(int(50 * self.scale_factor))
+        footer.setStyleSheet(f"""
+            QFrame {{
                 background-color: #2c3e50;
                 border-top: 1px solid #46627f;
-            }
+            }}
         """)
         
         layout = QVBoxLayout(footer)
@@ -160,22 +165,22 @@ class Sidebar(QWidget):
         
         # Información de versión
         version_label = QLabel("v1.0.0")
-        version_label.setStyleSheet("""
-            QLabel {
+        version_label.setStyleSheet(f"""
+            QLabel {{
                 color: #7f8c8d;
-                font-size: 10px;
-            }
+                font-size: {int(12 * self.scale_factor)}px;
+            }}
         """)
         layout.addWidget(version_label)
         
         # Estado
         status_label = QLabel("● En línea")
-        status_label.setStyleSheet("""
-            QLabel {
+        status_label.setStyleSheet(f"""
+            QLabel {{
                 color: #2ecc71;
-                font-size: 10px;
+                font-size: {int(12 * self.scale_factor)}px;
                 font-weight: bold;
-            }
+            }}
         """)
         layout.addWidget(status_label)
         
@@ -206,26 +211,26 @@ class Sidebar(QWidget):
         btn.setCursor(Qt.PointingHandCursor)
         
         # Estilo del botón
-        btn.setStyleSheet("""
-            QPushButton {
+        btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: transparent;
                 color: #ecf0f1;
                 border: none;
                 text-align: left;
-                padding: 8px 12px;
-                font-size: 13px;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
+                padding: {int(10 * self.scale_factor)}px {int(15 * self.scale_factor)}px;
+                font-size: {int(15 * self.scale_factor)}px;
+                border-radius: {int(5 * self.scale_factor)}px;
+            }}
+            QPushButton:hover {{
                 background-color: #46627f;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #4a6a8a;
-            }
-            QPushButton[active="true"] {
+            }}
+            QPushButton[active="true"] {{
                 background-color: #3498db;
                 color: white;
-            }
+            }}
         """)
         
         # Guardar referencia al botón

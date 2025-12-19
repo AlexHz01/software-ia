@@ -13,14 +13,27 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.nav_controller = nav_controller
         self.current_app_widget = None
+        
+        # Calcular factor de escala dinámico
+        from views.styles import get_scale_factor
+        self.scale_factor = get_scale_factor(self)
+        print(f"📏 Factor de escala detectado: {self.scale_factor}")
+        
         self.setup_ui()
         self.apply_styles()
         
     def setup_ui(self):
         """Configurar la interfaz de usuario principal"""
         self.setWindowTitle("Sistema Biblioteca IA - Dashboard")
-        self.setGeometry(100, 100, 1400, 900)
-        self.setMinimumSize(1200, 700)
+        
+        # Dimensiones dinámicas basadas en escala
+        width = int(1500 * self.scale_factor)
+        height = int(950 * self.scale_factor)
+        min_w = int(1200 * self.scale_factor)
+        min_h = int(800 * self.scale_factor)
+        
+        self.setGeometry(100, 100, width, height)
+        self.setMinimumSize(min_w, min_h)
         
         # Widget central
         central_widget = QWidget()
@@ -59,12 +72,12 @@ class MainWindow(QMainWindow):
     def create_content_header(self):
         """Crear el header del área de contenido"""
         header = QFrame()
-        header.setFixedHeight(60)
-        header.setStyleSheet("""
-            QFrame {
+        header.setFixedHeight(int(60 * self.scale_factor))
+        header.setStyleSheet(f"""
+            QFrame {{
                 background-color: #2c3e50;
                 border-bottom: 1px solid #34495e;
-            }
+            }}
         """)
         
         layout = QHBoxLayout(header)
@@ -72,12 +85,12 @@ class MainWindow(QMainWindow):
         
         # Título de la aplicación actual
         self.app_title = QLabel("Sistema Biblioteca IA")
-        self.app_title.setStyleSheet("""
-            QLabel {
+        self.app_title.setStyleSheet(f"""
+            QLabel {{
                 color: white;
-                font-size: 18px;
+                font-size: {int(20 * self.scale_factor)}px;
                 font-weight: bold;
-            }
+            }}
         """)
         layout.addWidget(self.app_title)
         
@@ -86,11 +99,11 @@ class MainWindow(QMainWindow):
         
         # Información del usuario
         self.user_info = QLabel("Modo: Desktop • v1.0.0")
-        self.user_info.setStyleSheet("""
-            QLabel {
+        self.user_info.setStyleSheet(f"""
+            QLabel {{
                 color: #bdc3c7;
-                font-size: 12px;
-            }
+                font-size: {int(14 * self.scale_factor)}px;
+            }}
         """)
         layout.addWidget(self.user_info)
         
