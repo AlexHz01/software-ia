@@ -22,7 +22,7 @@ def apply_light_theme(widget):
         }}
         QWidget {{
             font-family: 'Segoe UI', Arial, sans-serif;
-            font-size: {int(11 * f)}px;
+            /* font-size: {int(11 * f)}px; - ELIMINADO para heredar de QApplication */
         }}
     """)
 
@@ -38,7 +38,7 @@ def apply_dark_theme(widget):
             font-family: 'Segoe UI', Arial, sans-serif;
             background-color: #2c3e50;
             color: #ecf0f1;
-            font-size: {int(11 * f)}px;
+            /* font-size: {int(11 * f)}px; - ELIMINADO para heredar de QApplication */
         }}
     """)
 

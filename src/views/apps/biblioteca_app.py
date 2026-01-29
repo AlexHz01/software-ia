@@ -1,5 +1,10 @@
 import sys
 import os
+import warnings
+
+# Suppress specific PyQt5/Sip deprecation warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*sipPyTypeDict.*")
+
 # Agregar raíz del proyecto al path para los imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -270,14 +275,15 @@ class ProcesarLibroThread(QThread):
             self.db_manager.agregar_fragmentos(libro_id, fragmentos)
             
             # ¿Eliminar PDF original?
-            if not config_manager.get("almacenamiento", "conservar_pdfs", False):
-                try:
-                    os.remove(self.file_path)
-                    mensaje_final = f"Libro '{titulo}' procesado y PDF eliminado"
-                except:
-                    mensaje_final = f"Libro '{titulo}' procesado (no se pudo eliminar PDF)"
-            else:
-                mensaje_final = f"Libro '{titulo}' procesado exitosamente"
+            # SECCIÓN ELIMINADA POR SOLICITUD DE USUARIO
+            # if not config_manager.get("almacenamiento", "conservar_pdfs", False):
+            #     try:
+            #         os.remove(self.file_path)
+            #         mensaje_final = f"Libro '{titulo}' procesado y PDF eliminado"
+            #     except:
+            #         mensaje_final = f"Libro '{titulo}' procesado (no se pudo eliminar PDF)"
+            # else:
+            mensaje_final = f"Libro '{titulo}' procesado exitosamente"
             
             self.progreso.emit(100)
             self.terminado.emit(True, mensaje_final)
@@ -298,9 +304,9 @@ class DialogoProgreso(QDialog):
         layout = QVBoxLayout(self)
         
         # Información del archivo
-        label_archivo = QLabel(f"Procesando: {os.path.basename(file_path)}")
-        label_archivo.setStyleSheet("font-weight: bold; color: #2c3e50; font-size: 14px;")
-        layout.addWidget(label_archivo)
+        self.label_archivo = QLabel(f"Procesando: {os.path.basename(file_path)}")
+        self.label_archivo.setStyleSheet("font-weight: bold; color: #2c3e50; font-size: 14px;")
+        layout.addWidget(self.label_archivo)
         
         # Barra de progreso
         self.progress_bar = QProgressBar()
@@ -342,6 +348,12 @@ class DialogoProgreso(QDialog):
         self.btn_cancelar.clicked.connect(self.reject)
         layout.addWidget(self.btn_cancelar)
 
+    def actualizar_info(self, file_path, index, total):
+        """Actualizar información para procesamiento por lotes"""
+        self.label_archivo.setText(f"Procesando archivo {index}/{total}: {os.path.basename(file_path)}")
+        self.label_mensaje.setText("Iniciando...")
+        self.progress_bar.setValue(0)
+
 class DialogoSeleccionLibros(QDialog):
     """Diálogo para seleccionar libros específicos para consulta"""
     def __init__(self, parent=None, libros=None):
@@ -357,8 +369,23 @@ class DialogoSeleccionLibros(QDialog):
         
         # Instrucciones
         instrucciones = QLabel("Selecciona los libros que quieres incluir en la consulta:")
-        instrucciones.setStyleSheet("font-weight: bold; margin-bottom: 10px;")
+        instrucciones.setStyleSheet("font-weight: bold; margin-bottom: 5px;")
         layout.addWidget(instrucciones)
+        
+        # Buscador
+        self.busqueda = QLineEdit()
+        self.busqueda.setPlaceholderText("🔍 Buscar libro...")
+        self.busqueda.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #bdc3c7;
+                border-radius: 4px;
+                padding: 6px;
+                background: white;
+                margin-bottom: 5px;
+            }
+        """)
+        self.busqueda.textChanged.connect(self.filtrar_libros)
+        layout.addWidget(self.busqueda)
         
         # Lista de libros con checkboxes
         self.lista_libros = QListWidget()
@@ -422,6 +449,14 @@ class DialogoSeleccionLibros(QDialog):
                 self.libros_seleccionados.append({'id': libro_id, 'titulo': titulo})
         self.accept()
 
+    def filtrar_libros(self, texto):
+        """Filtrar la lista de libros"""
+        texto = texto.lower()
+        for i in range(self.lista_libros.count()):
+            item = self.lista_libros.item(i)
+            item_text = item.text().lower()
+            item.setHidden(texto not in item_text)
+
 class ConsultaThread(QThread):
     """Hilo seguro para procesar consultas IA"""
     respuesta_lista = pyqtSignal(str)
@@ -480,6 +515,330 @@ class ConsultaThread(QThread):
             error_msg = f"Error procesando consulta:\n\n{str(e)}"
             self.error_ocurrido.emit(error_msg)
 
+class LibraryManagerDialog(QDialog):
+    """Diálogo para gestión avanzada de biblioteca"""
+    def __init__(self, parent=None, db_manager=None, app_instance=None):
+        super().__init__(parent)
+        self.setWindowTitle("Gestión de Biblioteca")
+        self.resize(800, 600)
+        self.db_manager = db_manager
+        self.app = app_instance # Referencia para callbacks de procesado
+        
+        self.libros_filtrados = []
+        self.indice_actual = -1
+        self.setup_ui()
+        self.actualizar_lista_libros()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Header con título y botón agregar
+        header = QHBoxLayout()
+        title = QLabel("📚 Tu Colección de Libros")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50;")
+        header.addWidget(title)
+        
+        header.addStretch()
+        
+        btn_add = QPushButton("➕ Agregar Libros")
+        btn_add.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60;
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2ecc71;
+            }
+        """)
+        btn_add.clicked.connect(self.on_add_book_click)
+        header.addWidget(btn_add)
+        layout.addLayout(header)
+        
+        # Barra de herramientas (Búsqueda y Orden)
+        toolbar = QFrame()
+        toolbar.setStyleSheet("background-color: #ecf0f1; border-radius: 6px; padding: 5px;")
+        toolbar_layout = QHBoxLayout(toolbar)
+        
+        self.barra_busqueda = QLineEdit()
+        self.barra_busqueda.setPlaceholderText("🔍 Buscar por título o autor...")
+        self.barra_busqueda.setStyleSheet("border: 1px solid #bdc3c7; border-radius: 4px; padding: 6px; background: white;")
+        self.barra_busqueda.textChanged.connect(self.filtrar_libros)
+        toolbar_layout.addWidget(self.barra_busqueda)
+        
+        self.combo_orden = QComboBox()
+        self.combo_orden.addItems(["A-Z", "Z-A", "Más Recientes", "Más Antiguos", "Más Páginas"])
+        self.combo_orden.setStyleSheet("padding: 5px; border: 1px solid #bdc3c7; border-radius: 4px; background: white;")
+        self.combo_orden.currentTextChanged.connect(self.actualizar_lista_libros)
+        toolbar_layout.addWidget(self.combo_orden)
+        
+        layout.addWidget(toolbar)
+        
+        # Contenido principal: Lista y Detalles en Splitter
+        splitter = QSplitter(Qt.Horizontal)
+        
+        # Lista de libros
+        list_container = QWidget()
+        list_layout = QVBoxLayout(list_container)
+        list_layout.setContentsMargins(0,0,0,0)
+        
+        self.lista_libros = QListWidget()
+        self.lista_libros.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #bdc3c7;
+                border-radius: 4px;
+                background-color: white;
+            }
+            QListWidget::item { padding: 8px; border-bottom: 1px solid #f0f0f0; }
+            QListWidget::item:selected { background-color: #3498db; color: white; }
+        """)
+        self.lista_libros.itemSelectionChanged.connect(self.on_libro_seleccionado)
+        list_layout.addWidget(self.lista_libros)
+        
+        self.lbl_contador = QLabel("0 libros")
+        self.lbl_contador.setStyleSheet("color: #7f8c8d; font-size: 11px;")
+        list_layout.addWidget(self.lbl_contador)
+        
+        splitter.addWidget(list_container)
+        
+        # Panel de detalles
+        self.details_panel = QFrame()
+        self.details_panel.setStyleSheet("background-color: white; border: 1px solid #bdc3c7; border-radius: 4px;")
+        details_layout = QVBoxLayout(self.details_panel)
+        
+        self.lbl_details = QLabel("Selecciona un libro para ver su información detallada.")
+        self.lbl_details.setWordWrap(True)
+        self.lbl_details.setAlignment(Qt.AlignTop)
+        details_layout.addWidget(self.lbl_details)
+        details_layout.addStretch()
+        
+        # Botones de acción para libro seleccionado
+        buttons_layout = QHBoxLayout()
+        
+        # Eliminar btn_use ("Usar en Chat") - ELIMINADO POR SOLICITUD
+        
+        self.btn_delete = QPushButton("🗑️ Eliminar")
+        self.btn_delete.setStyleSheet("""
+            QPushButton {
+                color: #c0392b; 
+                border: 1px solid #c0392b; 
+                padding: 6px; 
+                border-radius: 4px; 
+                background: white;
+            }
+            QPushButton:hover { background-color: #fcebeb; }
+            QPushButton:disabled { color: #bdc3c7; border-color: #bdc3c7; }
+        """)
+        self.btn_delete.setEnabled(False)
+        self.btn_delete.clicked.connect(self.eliminar_libro_seleccionado) 
+        buttons_layout.addWidget(self.btn_delete)
+        
+        details_layout.addLayout(buttons_layout)
+        
+        splitter.addWidget(self.details_panel)
+        splitter.setSizes([300, 500]) # Proporción inicial
+        
+        layout.addWidget(splitter)
+        
+        # Footer
+        btn_close = QPushButton("Cerrar")
+        btn_close.clicked.connect(self.accept)
+        layout.addWidget(btn_close, alignment=Qt.AlignRight)
+
+    def on_add_book_click(self):
+        """Manejador para agregar libros (soporte para múltiples archivos)"""
+        # NO OCULTAMOS EL DIÁLOGO - Se mantiene abierto
+        
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self, 
+            "Seleccionar libros PDF", 
+            "", 
+            "PDF Files (*.pdf)"
+        )
+        
+        if file_paths:
+            if len(file_paths) == 1:
+                self.mostrar_dialogo_progreso(file_paths[0])
+            else:
+                self.iniciar_procesamiento_lote(file_paths)
+
+    def mostrar_dialogo_progreso(self, file_path):
+        """Mostrar diálogo de progreso para procesar libro (single file)"""
+        # Usamos self como padre para que sea modal sobre este diálogo
+        dialog = DialogoProgreso(self, file_path)
+        
+        self.procesar_thread = ProcesarLibroThread(file_path)
+        self.procesar_thread.progreso.connect(dialog.progress_bar.setValue)
+        self.procesar_thread.mensaje.connect(dialog.label_mensaje.setText)
+        self.procesar_thread.terminado.connect(
+            lambda exito, mensaje: self.on_procesamiento_terminado(exito, mensaje, dialog)
+        )
+        dialog.btn_cancelar.clicked.connect(self.procesar_thread.terminate)
+        
+        self.procesar_thread.start()
+        dialog.exec_()
+
+    def on_procesamiento_terminado(self, exito, mensaje, dialog):
+        dialog.close()
+        if exito:
+            QMessageBox.information(self, "✅ Procesamiento Completado", mensaje)
+            self.actualizar_lista_libros() # Actualizamos la lista local
+        else:
+            QMessageBox.critical(self, "❌ Error en Procesamiento", mensaje)
+
+    # ============ PROCESAMIENTO POR LOTES (Copiado a Manager) ============
+    
+    def iniciar_procesamiento_lote(self, file_paths):
+        self.cola_procesamiento = list(file_paths)
+        self.resultados_procesamiento = []
+        self.total_archivos_lote = len(file_paths)
+        
+        self.dialogo_progreso_lote = DialogoProgreso(self, file_paths[0])
+        self.dialogo_progreso_lote.setWindowTitle("Procesando Lote de Libros")
+        self.dialogo_progreso_lote.btn_cancelar.clicked.connect(self.cancelar_lote)
+        
+        self.procesar_siguiente_en_cola()
+        self.dialogo_progreso_lote.exec_()
+        
+    def procesar_siguiente_en_cola(self):
+        if not self.cola_procesamiento:
+            self.finalizar_procesamiento_lote()
+            return
+
+        current_file = self.cola_procesamiento.pop(0)
+        current_index = self.total_archivos_lote - len(self.cola_procesamiento)
+        
+        self.dialogo_progreso_lote.actualizar_info(
+            current_file, 
+            current_index, 
+            self.total_archivos_lote
+        )
+        
+        self.procesar_thread = ProcesarLibroThread(current_file)
+        self.procesar_thread.progreso.connect(self.dialogo_progreso_lote.progress_bar.setValue)
+        self.procesar_thread.mensaje.connect(self.dialogo_progreso_lote.label_mensaje.setText)
+        self.procesar_thread.terminado.connect(
+            lambda exito, mensaje: self.on_lote_step_terminado(exito, mensaje, current_file)
+        )
+        self.procesar_thread.start()
+        
+    def on_lote_step_terminado(self, exito, mensaje, file_path):
+        filename = os.path.basename(file_path)
+        self.resultados_procesamiento.append({
+            'archivo': filename,
+            'exito': exito,
+            'mensaje': mensaje
+        })
+        QTimer.singleShot(500, self.procesar_siguiente_en_cola)
+        
+    def cancelar_lote(self):
+        self.cola_procesamiento = [] 
+        if hasattr(self, 'procesar_thread') and self.procesar_thread.isRunning():
+            self.procesar_thread.terminate()
+        self.dialogo_progreso_lote.close()
+        
+    def finalizar_procesamiento_lote(self):
+        if self.dialogo_progreso_lote:
+            self.dialogo_progreso_lote.close()
+            
+        errores = [r for r in self.resultados_procesamiento if not r['exito']]
+        exitos = [r for r in self.resultados_procesamiento if r['exito']]
+        
+        self.actualizar_lista_libros()
+        
+        if not errores:
+            QMessageBox.information(
+                self, "✅ Lote Completado", 
+                f"Se procesaron exitosamente {len(exitos)} libros."
+            )
+        else:
+            msg = f"Se procesaron {len(exitos)} libros correctamente.\n"
+            msg += f"Hubo errores en {len(errores)} archivos:\n\n"
+            for err in errores:
+                msg += f"• {err['archivo']}: {err['mensaje']}\n"
+            QMessageBox.warning(self, "⚠️ Lote con Errores", msg)
+
+    def actualizar_lista_libros(self):
+        self.lista_libros.clear()
+        # Forzar refresco desde DB para asegurar que vemos lo último
+        libros = self.db_manager.obtener_libros(force_refresh=True)
+        
+        # Filtrado
+        query = self.barra_busqueda.text().lower()
+        if query:
+            self.libros_filtrados = [l for l in libros if query in l['titulo'].lower() or (l['autor'] and query in l['autor'].lower())]
+        else:
+            self.libros_filtrados = list(libros)
+            
+        # Ordenamiento simple
+        orden = self.combo_orden.currentText()
+        if "A-Z" in orden: self.libros_filtrados.sort(key=lambda x: x['titulo'].lower())
+        elif "Z-A" in orden: self.libros_filtrados.sort(key=lambda x: x['titulo'].lower(), reverse=True)
+        # ... más lógica de orden si necesaria
+        
+        for libro in self.libros_filtrados:
+            item = QListWidgetItem(f"{libro['titulo']}")
+            item.setData(Qt.UserRole, libro)
+            self.lista_libros.addItem(item)
+            
+        self.lbl_contador.setText(f"{len(self.libros_filtrados)} libros encontrados")
+        
+    def filtrar_libros(self):
+        self.actualizar_lista_libros()
+        
+    def on_libro_seleccionado(self):
+        items = self.lista_libros.selectedItems()
+        if not items:
+            self.lbl_details.setText("Selecciona un libro...")
+            self.btn_delete.setEnabled(False)
+            return
+            
+        libro = items[0].data(Qt.UserRole)
+        self.btn_delete.setEnabled(True)
+        
+        html = f"""
+        <h2>{libro['titulo']}</h2>
+        <p><b>Autor:</b> {libro['autor'] or 'Desconocido'}</p>
+        <p><b>Páginas:</b> {libro['total_paginas']}</p>
+        <p><b>ID:</b> {libro['id']}</p>
+        <p><i>Fecha procesamiento: {libro['fecha_procesado']}</i></p>
+        <hr>
+        <p>Contenido fragmentado en {libro['total_fragmentos']} partes.</p>
+        """
+        self.lbl_details.setText(html)
+
+    def usar_libro_chat(self):
+        pass # Obsoleto/Eliminado de UI
+        
+    def eliminar_libro_seleccionado(self):
+        """Eliminar el libro seleccionado"""
+        items = self.lista_libros.selectedItems()
+        if not items: return
+        
+        libro = items[0].data(Qt.UserRole)
+        titulo = libro['titulo']
+        
+        reply = QMessageBox.question(
+            self, 
+            "Confirmar eliminación", 
+            f"¿Estás seguro de que deseas eliminar el libro '{titulo}'?\n\nEsta acción no se puede deshacer.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            if self.db_manager.eliminar_libro(libro['id']):
+                QMessageBox.information(self, "Eliminado", f"El libro '{titulo}' ha sido eliminado.")
+                self.actualizar_lista_libros()
+                # Limpiar panel de detalles
+                self.lbl_details.setText("Selecciona un libro para ver su información detallada.")
+                self.btn_delete.setEnabled(False)
+            else:
+                QMessageBox.critical(self, "Error", "No se pudo eliminar el libro.")
+
 class BibliotecaApp(BaseApp):
     """Aplicación de gestión de biblioteca con IA - Versión Completa"""
     
@@ -503,6 +862,12 @@ class BibliotecaApp(BaseApp):
         self.libros_consulta = None  # None = todos, lista = libros específicos
         self.libros_filtrados = []
         self.indice_actual = -1
+        
+        # Variables para procesamiento por lotes
+        self.cola_procesamiento = []
+        self.resultados_procesamiento = []
+        self.total_archivos_lote = 0
+        self.dialogo_progreso_lote = None
         
         # Timer para debouncing de búsqueda
         self.search_timer = QTimer()
@@ -609,189 +974,10 @@ class BibliotecaApp(BaseApp):
         main_layout.setContentsMargins(0, 10, 0, 0)  # Margen superior para evitar superposición
         main_layout.setSpacing(0)
         
-        # Panel superior - Libros (colapsable)
-        self.books_widget = QWidget()
-        self.books_widget.setMaximumHeight(250)  # Altura cuando está expandido
-        books_layout = QVBoxLayout(self.books_widget)
-        books_layout.setContentsMargins(10, 5, 10, 10)
-        books_layout.setSpacing(5)
+        # Panel superior - Libros (ELIMINADO - movido a diálogo)
+        # self.books_widget = ... (código eliminado)
         
-        # Botón para colapsar/expandir la sección de libros
-        toggle_books_layout = QHBoxLayout()
-        self.btn_toggle_books = QPushButton("📚 Tus Libros ▼")
-        self.btn_toggle_books.setStyleSheet("""
-            QPushButton {
-                background-color: #f8f9fa;
-                border: none;
-                border-bottom: 2px solid #e9ecef;
-                padding: 8px 15px;
-                text-align: left;
-                font-weight: bold;
-                font-size: 13px;
-                color: #2c3e50;
-            }
-            QPushButton:hover {
-                background-color: #e9ecef;
-            }
-        """)
-        self.btn_toggle_books.clicked.connect(self.toggle_books_section)
-        self.books_section_visible = True
-        toggle_books_layout.addWidget(self.btn_toggle_books)
-        books_layout.addLayout(toggle_books_layout)
-        
-        # Contenedor para la sección de libros (el que se oculta/muestra)
-        self.books_content = QWidget()
-        books_content_layout = QVBoxLayout(self.books_content)
-        books_content_layout.setContentsMargins(0, 0, 0, 0)
-        books_content_layout.setSpacing(10)
-        
-        # Grupo de libros con herramientas de búsqueda
-        libros_group = QFrame()
-        libros_group.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border: none;
-            }
-        """)
-        libros_layout = QVBoxLayout(libros_group)
-        libros_layout.setContentsMargins(5, 5, 5, 5)
-        
-        # Barra de búsqueda rápida
-        search_layout = QHBoxLayout()
-        self.barra_busqueda = QLineEdit()
-        self.barra_busqueda.setPlaceholderText("🔍 Buscar libro...")
-        self.barra_busqueda.setStyleSheet("""
-            QLineEdit {
-                padding: 8px;
-                border: 1px solid #bdc3c7;
-                border-radius: 4px;
-                font-size: 12px;
-            }
-            QLineEdit:focus {
-                border-color: #3498db;
-            }
-        """)
-        self.barra_busqueda.textChanged.connect(self.on_search_text_changed)
-        search_layout.addWidget(self.barra_busqueda)
-        
-        # ComboBox para ordenamiento
-        self.combo_orden = QComboBox()
-        self.combo_orden.addItems(["Orden: A-Z", "Orden: Z-A", "Recientes", "Antiguos", "Más fragmentos"])
-        self.combo_orden.setStyleSheet("""
-            QComboBox {
-                padding: 6px;
-                border: 1px solid #bdc3c7;
-                border-radius: 4px;
-                font-size: 11px;
-                min-width: 100px;
-                background-color: white;
-                color: #2c3e50;
-            }
-            QComboBox:hover {
-                border-color: #3498db;
-                background-color: #f8f9fa;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox QAbstractItemView {
-                background-color: white;
-                color: #2c3e50;
-                selection-background-color: #e8f4f8;
-                selection-color: #2c3e50;
-            }
-        """)
-        self.combo_orden.currentTextChanged.connect(self.actualizar_lista_libros)
-        search_layout.addWidget(self.combo_orden)
-        
-        libros_layout.addLayout(search_layout)
-        
-        # Contador de resultados
-        self.contador_libros = QLabel("")
-        self.contador_libros.setStyleSheet("font-size: 11px; color: #7f8c8d;")
-        libros_layout.addWidget(self.contador_libros)
-        
-        # Lista de libros con scroll
-        self.lista_libros = QListWidget()
-        self.lista_libros.setStyleSheet("""
-            QListWidget {
-                border: 1px solid #bdc3c7;
-                border-radius: 4px;
-                padding: 2px;
-                background-color: white;
-                font-size: 12px;
-            }
-            QListWidget::item {
-                padding: 8px 5px;
-                border-bottom: 1px solid #ecf0f1;
-            }
-            QListWidget::item:selected {
-                background-color: #3498db;
-                color: white;
-            }
-            QListWidget::item:hover {
-                background-color: #e8f4f8;
-                color: #2c3e50;
-            }
-        """)
-        self.lista_libros.itemDoubleClicked.connect(self.on_libro_doble_click)
-        self.lista_libros.itemSelectionChanged.connect(self.on_libro_seleccionado)
-        libros_layout.addWidget(self.lista_libros)
-        
-        # Controles de navegación rápida
-        nav_layout = QHBoxLayout()
-        
-        self.btn_primero = QPushButton("⏮")
-        self.btn_anterior = QPushButton("◀")
-        self.btn_siguiente = QPushButton("▶")
-        self.btn_ultimo = QPushButton("⏭")
-        
-        for btn in [self.btn_primero, self.btn_anterior, self.btn_siguiente, self.btn_ultimo]:
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #95a5a6;
-                    color: white;
-                    border: none;
-                    padding: 5px;
-                    border-radius: 3px;
-                    font-size: 10px;
-                    min-width: 30px;
-                }
-                QPushButton:hover {
-                    background-color: #7f8c8d;
-                }
-                QPushButton:disabled {
-                    background-color: #bdc3c7;
-                }
-            """)
-            btn.clicked.connect(self.navegar_libros)
-        
-        nav_layout.addWidget(self.btn_primero)
-        nav_layout.addWidget(self.btn_anterior)
-        nav_layout.addStretch()
-        nav_layout.addWidget(self.btn_siguiente)
-        nav_layout.addWidget(self.btn_ultimo)
-        
-        libros_layout.addLayout(nav_layout)
-        
-        # Información del libro seleccionado
-        self.info_libro_label = QLabel("Selecciona un libro para ver detalles")
-        self.info_libro_label.setStyleSheet("""
-            QLabel {
-                font-size: 11px;
-                color: #7f8c8d;
-                padding: 8px;
-                background-color: #f8f9fa;
-                border-radius: 4px;
-                margin-top: 5px;
-            }
-        """)
-        self.info_libro_label.setWordWrap(True)
-        libros_layout.addWidget(self.info_libro_label)
-        
-        books_content_layout.addWidget(libros_group)
-        books_layout.addWidget(self.books_content)
-        main_layout.addWidget(self.books_widget)
+        # Panel inferior - Chat IA (ocupa todo el espacio)
         
         # Panel inferior - Chat IA (ocupa más espacio)
         chat_widget = QWidget()
@@ -810,68 +996,60 @@ class BibliotecaApp(BaseApp):
         header_layout = QHBoxLayout(header_frame)
         header_layout.setContentsMargins(15, 10, 15, 10)
         
-        header_layout.addWidget(QLabel("🔍 Buscar en:"))
+        header_layout.addWidget(QLabel("🔍 Contexto:"))
         
-        self.combo_ambito = QComboBox()
-        self.combo_ambito.addItems(["Todos los libros", "Libro actual", "Libros seleccionados..."])
-        self.combo_ambito.setStyleSheet("""
-            QComboBox {
-                padding: 5px 10px;
+        self.btn_select_context = QPushButton("📚 Seleccionar libros...")
+        self.btn_select_context.setCursor(Qt.PointingHandCursor)
+        self.btn_select_context.setStyleSheet("""
+            QPushButton {
+                padding: 6px 12px;
+                background-color: white;
                 border: 1px solid #bdc3c7;
                 border-radius: 4px;
-                font-size: 12px;
-                background: white;
+                color: #2c3e50;
+                font-size: 13px;
+                min-width: 150px;
+                text-align: left;
+            }
+            QPushButton:hover {
+                background-color: #f8f9fa;
+                border-color: #adadad;
             }
         """)
-        self.combo_ambito.currentTextChanged.connect(self.cambiar_ambito_busqueda)
-        header_layout.addWidget(self.combo_ambito)
+        self.btn_select_context.clicked.connect(self.seleccionar_libros_consulta)
+        header_layout.addWidget(self.btn_select_context)
         
         self.label_ambito_actual = QLabel("📚 Todos los libros")
-        self.label_ambito_actual.setStyleSheet("font-size: 11px; color: #7f8c8d; font-style: italic;")
+        self.label_ambito_actual.setStyleSheet("font-size: 11px; color: #7f8c8d; font-style: italic; margin-left: 5px;")
         header_layout.addWidget(self.label_ambito_actual)
         
         header_layout.addStretch()
         
-        # Botón para agregar libro
-        btn_add = QPushButton("➕")
-        btn_add.setToolTip("Agregar Libro PDF")
-        btn_add.setFixedSize(32, 32)
-        btn_add.setCursor(Qt.PointingHandCursor)
-        btn_add.setStyleSheet("""
+        # Botón para abrir el Gestor de Biblioteca (NUEVO)
+        btn_manager = QPushButton("📚 Gestionar Biblioteca")
+        btn_manager.setToolTip("Abrir ventana de gestión de libros")
+        btn_manager.setCursor(Qt.PointingHandCursor)
+        btn_manager.setStyleSheet("""
             QPushButton {
-                background-color: #3498db;
+                background-color: #34495e;
                 color: white;
                 border: none;
-                border-radius: 16px;
-                font-size: 18px;
+                border-radius: 4px;
+                padding: 6px 12px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #2980b9;
+                background-color: #2c3e50;
             }
         """)
-        btn_add.clicked.connect(self.on_add_book)
-        header_layout.addWidget(btn_add)
+        btn_manager.clicked.connect(self.on_open_library_manager)
+        header_layout.addWidget(btn_manager)
         
-        # Botón de consultas rápidas
-        btn_quick = QPushButton("💡")
-        btn_quick.setToolTip("Consultas Rápidas")
-        btn_quick.setFixedSize(32, 32)
-        btn_quick.setCursor(Qt.PointingHandCursor)
-        btn_quick.setStyleSheet("""
-            QPushButton {
-                background-color: #f39c12;
-                color: white;
-                border: none;
-                border-radius: 16px;
-                font-size: 16px;
-            }
-            QPushButton:hover {
-                background-color: #e67e22;
-            }
-        """)
-        btn_quick.clicked.connect(self.mostrar_consultas_rapidas)
-        header_layout.addWidget(btn_quick)
+        # Botón para agregar libro (DIRECTO) - Mantenido pero reducido, o eliminado si preferimos todo en el gestor
+        # Vamos a dejar solo el gestor para limpiar, así que eliminamos btn_add explícito aquí
+        # btn_add = QPushButton("➕") ...
+        
+        # Botón de consultas rápidas (ELIMINADO)
         
         chat_layout.addWidget(header_frame)
         
@@ -1062,7 +1240,12 @@ class BibliotecaApp(BaseApp):
             # Si hay libros referenciados, podríamos seleccionarlos
             if consulta['libros_referenciados']:
                 self.libros_consulta = consulta['libros_referenciados']
-                self.combo_ambito.setCurrentText(f"Seleccionados ({len(self.libros_consulta)})")
+                count = len(self.libros_consulta)
+                if count == 1:
+                    # Intentar obtener título si es posible, si no mostrar genérico
+                    self.label_ambito_actual.setText(f"📖 Libro restaurado del historial")
+                else:
+                    self.label_ambito_actual.setText(f"🎯 {count} libros (historial)")
 
     def on_clear_history(self):
         """Limpiar todo el historial (con confirmación)"""
@@ -1355,47 +1538,74 @@ class BibliotecaApp(BaseApp):
         self.input_pregunta.setFocus()
         self.input_pregunta.setSelection(len(consulta), len(consulta))
 
+    def on_open_library_manager(self):
+        """Abrir diálogo de gestión de biblioteca"""
+        dialog = LibraryManagerDialog(self, self.db_manager, self)
+        dialog.exec_()
+
+    def set_current_book_context(self, book_id, title):
+        """Establecer un libro específico como contexto del chat desde el Manager"""
+        self.libros_consulta = [book_id]
+        self.label_ambito_actual.setText(f"📖 {title}")
+        self.set_info_status(f"Contexto: {title}")
+
+    def set_info_status(self, text):
+        # Helper simple para mostrar estado
+        pass
+
     def cambiar_ambito_busqueda(self, ambito):
+        """Cambiar el ámbito de búsqueda para las consultas"""
+        if ambito == "Todos los libros":
+            self.libros_consulta = None
+            self.label_ambito_actual.setText("📚 Todos los libros")
+            self.set_info_status("Búsqueda en toda la biblioteca")
+            
+        elif ambito == "Seleccionar libros...":
+            # REVERTIR la selección en el combo visualmente para que no se quede en "Seleccionar..."
+            # si el usuario cancela. O dejarlo.
+            self.seleccionar_libros_consulta()
+            
+        elif ambito == "Libro actual":
+            # Si no hay libro seleccionado, volver a todos
+            if not self.libros_consulta:
+                self.combo_ambito.setCurrentText("Todos los libros")
         """Cambiar el ámbito de búsqueda para las consultas"""
         if ambito == "Todos los libros":
             self.libros_consulta = None
             self.label_ambito_actual.setText("📚 Todos los libros")
             
         elif ambito == "Libro actual":
-            items = self.lista_libros.selectedItems()
-            if items:
-                libro_id = items[0].data(Qt.UserRole)
-                libro = next((l for l in self.libros_filtrados if l['id'] == libro_id), None)
-                if libro:
-                    self.libros_consulta = [libro_id]
-                    self.label_ambito_actual.setText(f"📖 {libro['titulo']}")
-                else:
-                    QMessageBox.warning(self, "Selecciona un libro", "Por favor selecciona un libro primero.")
-                    self.combo_ambito.setCurrentText("Todos los libros")
-            else:
-                QMessageBox.warning(self, "Selecciona un libro", "Por favor selecciona un libro primero.")
-                self.combo_ambito.setCurrentText("Todos los libros")
+            # YA NO SOPORTADO DIRECTAMENTE desde la main UI porque no hay selección
+            # Podríamos abrir un selector rápido o simplemente advertir
+            QMessageBox.information(self, "Info", "Usa 'Gestionar Biblioteca' o 'Seleccionar libros' para filtrar.")
+            self.combo_ambito.setCurrentText("Todos los libros")
                 
         elif ambito == "Libros seleccionados...":
             self.seleccionar_libros_consulta()
 
     def actualizar_ambito_automatico(self):
-        """Actualizar automáticamente el ámbito basado en la selección actual"""
-        if self.combo_ambito.currentText() == "Libro actual":
-            items = self.lista_libros.selectedItems()
-            if items:
-                libro_id = items[0].data(Qt.UserRole)
-                libro = next((l for l in self.libros_filtrados if l['id'] == libro_id), None)
-                if libro:
-                    self.libros_consulta = [libro_id]
-                    self.label_ambito_actual.setText(f"📖 {libro['titulo']}")
-            else:
-                # Si no hay libro seleccionado, cambiar a "Todos los libros"
-                self.combo_ambito.setCurrentText("Todos los libros")
+        # Desactivado - ya no hay lista seleccionable en main UI
+        pass
+
+    # ============ MÉTODOS OBSOLETOS (STUBS) ============
+    # Mantenidos vacíos por si acaso alguna señal pendiente los llama, 
+    # pero deberían ser eliminados en una limpieza profunda.
+
+    def actualizar_lista_libros(self): pass
+    def navigation_libros(self): pass # Typo in original? No, it was navegar_libros
+    def navegar_libros(self): pass
+    def on_libro_doble_click(self, item): pass
+    def on_libro_seleccionado(self): pass
+    def on_search_text_changed(self): pass
+    def toggle_books_section(self): pass
+    def mostrar_detalles_libro(self, id): pass
+    
+    # ===================================================
 
     def seleccionar_libros_consulta(self):
         """Abrir diálogo para seleccionar múltiples libros"""
-        libros = self.db_manager.obtener_libros()
+        # Forzar refresco para ver libros acabados de agregar
+        libros = self.db_manager.obtener_libros(force_refresh=True)
         if not libros:
             QMessageBox.warning(self, "Sin libros", "No hay libros disponibles para seleccionar.")
             self.combo_ambito.setCurrentText("Todos los libros")
@@ -1412,47 +1622,25 @@ class BibliotecaApp(BaseApp):
                     self.label_ambito_actual.setText(f"🎯 {', '.join(nombres)}")
             else:
                 self.combo_ambito.setCurrentText("Todos los libros")
-
-    def on_add_book(self):
-        """Manejador para agregar libro"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, 
-            "Seleccionar libro PDF", 
-            "", 
-            "PDF Files (*.pdf)"
-        )
-        
-        if file_path:
-            self.mostrar_dialogo_progreso(file_path)
-
-    def mostrar_dialogo_progreso(self, file_path):
-        """Mostrar diálogo de progreso para procesar libro"""
-        dialog = DialogoProgreso(self, file_path)
-        
-        # Crear y conectar thread
-        self.procesar_thread = ProcesarLibroThread(file_path)
-        self.procesar_thread.progreso.connect(dialog.progress_bar.setValue)
-        self.procesar_thread.mensaje.connect(dialog.label_mensaje.setText)
-        self.procesar_thread.terminado.connect(
-            lambda exito, mensaje: self.on_procesamiento_terminado(exito, mensaje, dialog)
-        )
-        dialog.btn_cancelar.clicked.connect(self.procesar_thread.terminate)
-        
-        self.procesar_thread.start()
-        dialog.exec_()
+                
+    # ... (Resto de on_add_book, etc) - ELIMINADO: Movido a LibraryManagerDialog
+    # def on_add_book(self): ...
+    # def mostrar_dialogo_progreso(self): ...
 
     def on_procesamiento_terminado(self, exito, mensaje, dialog):
-        """Manejador cuando termina el procesamiento"""
+        """Manejador cuando termina el procesamiento (single file)"""
         dialog.close()
         
         if exito:
             QMessageBox.information(self, "✅ Procesamiento Completado", mensaje)
             self.actualizar_estadisticas()
-            self.actualizar_lista_libros()
+            # self.actualizar_lista_libros() # ELIMINADO - Ya no actualizamos lista en main UI
         else:
             QMessageBox.critical(self, "❌ Error en Procesamiento", mensaje)
 
-    def on_enviar_consulta(self):
+    # Los métodos de procesamiento por lote también han sido movidos al Manager
+
+    # ... (on_enviar_consulta, etc)
         """Manejador para enviar consulta IA"""
         pregunta = self.input_pregunta.text().strip()
         if not pregunta:
@@ -1536,3 +1724,36 @@ class BibliotecaApp(BaseApp):
         """Actualizar las estadísticas en la UI"""
         # Panel de estadísticas removido - método mantenido para compatibilidad
         pass
+
+if __name__ == "__main__":
+    from PyQt5.QtWidgets import QApplication
+    import sys
+    
+    # Configurar aplicación
+    app = QApplication(sys.argv)
+    app.setApplicationName("Biblioteca IA (Standalone)")
+    
+    # Configurar fuente con escalado básico para standalone
+    screen = app.primaryScreen()
+    height = screen.geometry().height()
+    
+    scale = 1.25
+    if height >= 2100: scale = 2.4
+    elif height >= 1400: scale = 1.8
+        
+    font = QFont("Segoe UI", int(10 * scale))
+    app.setFont(font)
+    
+    try:
+        # Instanciar y mostrar app
+        window = BibliotecaApp()
+        window.resize(1000, 700)
+        window.show()
+        
+        print("✅ BibliotecaApp iniciada en modo standalone")
+        sys.exit(app.exec_())
+        
+    except Exception as e:
+        print(f"❌ Error al iniciar: {e}")
+        import traceback
+        traceback.print_exc()

@@ -70,9 +70,9 @@ def main():
     app.setApplicationName("Sistema Biblioteca IA")
     app.setApplicationVersion("1.0.0")
     
-    # Configurar fuente global - Aumentada para mejor legibilidad en 1080p
-    font = QFont("Segoe UI", 11)
-    app.setFont(font)
+    # Configurar fuente global inicial (será ajustada en main loop)
+    # font = QFont("Segoe UI", 11) 
+    # app.setFont(font)
     
     try:
         print("=" * 50)
@@ -81,6 +81,34 @@ def main():
         print(f"📁 Directorio de datos: {DATA_DIR}")
         print(f"📁 Directorio de configuración: {CONFIG_DIR}")
         print(f"📁 Directorio de recursos: {RESOURCES_DIR}")
+        
+        # --- LÓGICA DE ESCALADO DE ALTA RESOLUCIÓN ---
+        screen = app.primaryScreen()
+        screen_geometry = screen.geometry()
+        screen_height = screen_geometry.height()
+        
+        # Escala base (1.25 para asegurar buena visibilidad por defecto)
+        base_scale = 1.25
+        
+        # Configuración automática según resolución vertical
+        if screen_height >= 2100:  # 4K (aprox 2160p)
+            base_scale = 2.4
+            print(f"🖥️ Pantalla 4K detectada ({screen_height}p). Escala ajustada a {base_scale}")
+        elif screen_height >= 1400:  # 2K (aprox 1440p)
+            base_scale = 1.8
+            print(f"🖥️ Pantalla 2K detectada ({screen_height}p). Escala ajustada a {base_scale}")
+        else:
+            print(f"🖥️ Pantalla Estándar detectada ({screen_height}p). Escala base: {base_scale}")
+            
+        # Aplicar fuente global escalada
+        base_font_size = 10
+        scaled_font_size = int(base_font_size * base_scale)
+        font = QFont("Segoe UI", scaled_font_size)
+        app.setFont(font)
+        
+        # Guardar factor de escala para uso en estilos (opcional, si se necesita globalmente)
+        os.environ["QT_SCALE_FACTOR_CUSTOM"] = str(base_scale)
+        # -----------------------------------------------
         
         # Crear y configurar aplicación principal
         main_app = BibliotecaAppManager()

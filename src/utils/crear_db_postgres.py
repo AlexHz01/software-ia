@@ -1,4 +1,4 @@
-import psycopg2
+import psycopg
 from config.config_manager import config_manager
 
 def crear_base_datos():
@@ -7,7 +7,7 @@ def crear_base_datos():
     
     try:
         # Conectar a PostgreSQL (sin especificar base de datos)
-        conn = psycopg2.connect(
+        conn = psycopg.connect(
             host=pg_config['host'],
             port=pg_config['puerto'],
             user=pg_config['usuario'],

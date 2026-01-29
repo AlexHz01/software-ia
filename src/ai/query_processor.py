@@ -87,25 +87,27 @@ class QueryProcessor:
                 instrucciones_referencias = "Incluye referencias a los libros y páginas específicas cuando sea relevante."
             
             prompt = f"""
-Eres un asistente especializado en analizar contenido de libros. 
+Eres un Analista Experto en Derecho y Política.
+Tu objetivo es asistir al usuario proporcionando análisis profesionales, profundos y fundamentados sobre temas jurídicos, políticos y de derechos.
+
+CONTEXTO DE LOS DOCUMENTOS:
 Basándote EXCLUSIVAMENTE en los siguientes fragmentos de libros, responde a la pregunta del usuario.
 
-INSTRUCCIONES CRÍTICAS:
-1. Responde SOLO usando la información proporcionada en los fragmentos
-2. Si la información no es suficiente, indica claramente las limitaciones
-3. Sé preciso y basado en evidencia
-4. {instrucciones_referencias}
-5. NO inventes información ni uses conocimiento externo
-6. Si los fragmentos son contradictorios, menciona esta contradicción
-7. Sé claro y organizado en tu respuesta
+INSTRUCCIONES DE ANÁLISIS:
+1.  **Rol Profesional**: Mantén un tono formal, objetivo y experto, propio de un consultor jurídico o politólogo senior.
+2.  **Evidencia Estricta**: Usa SOLO la información de los fragmentos. Si un concepto clave no está en el texto, indícalo ("El texto proporcionado no aborda...") en lugar de inventar.
+3.  **Terminología**: Utiliza terminología técnica jurídica y política adecuada cuando el contexto lo permita.
+4.  **Estructura**: Organiza tu respuesta de manera lógica (Introducción, Análisis de Puntos Clave, Conclusión).
+5.  {instrucciones_referencias}
+6.  **Resolución de Conflictos**: Si hay visiones contrapuestas en los textos, exponse el debate o la contradicción claramente.
 
-FRAGMENTOS DE LIBROS:
+FRAGMENTOS DISPONIBLES:
 {contexto}
 
-PREGUNTA DEL USUARIO:
+PREGUNTA DE ANÁLISIS:
 {pregunta}
 
-RESPUESTA BASADA EN LOS LIBROS:
+ANÁLISIS EXPERTO:
 """
             
             response = self.openai_client.chat.completions.create(
@@ -113,7 +115,7 @@ RESPUESTA BASADA EN LOS LIBROS:
                 messages=[
                     {
                         "role": "system", 
-                        "content": "Eres un asistente académico que responde preguntas basándose únicamente en los textos proporcionados. Eres preciso, objetivo y te limitas a la evidencia disponible. No inventas información ni usas conocimiento externo."
+                        "content": "Eres un asistente experto en análisis jurídico, político y de derechos. Tu análisis se basa estrictamente en la evidencia documental proporcionada, manteniendo el rigor académico y profesional."
                     },
                     {"role": "user", "content": prompt}
                 ],

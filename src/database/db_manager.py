@@ -99,8 +99,25 @@ class DatabaseManager:
             ruta_db = sqlite_config['ruta_db']
             os.makedirs(os.path.dirname(ruta_db), exist_ok=True)
             connection_string = f"sqlite:///{ruta_db}"
-            engine = create_engine(connection_string)
-            print("✅ Conectado a SQLite")
+            
+            # Crear engine con optimizaciones
+            engine = create_engine(
+                connection_string,
+                connect_args={'check_same_thread': False}
+            )
+            
+            # Configurar PRAGMAs para cada conexión (Performance Tuning)
+            def set_lite_optimizer(dbapi_connection, connection_record):
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL") # Write-Ahead Logging
+                cursor.execute("PRAGMA synchronous=NORMAL") # Faster writes
+                cursor.execute("PRAGMA cache_size=-64000") # 64MB Cache
+                cursor.execute("PRAGMA temp_store=MEMORY") # RAM for temp tables
+                cursor.close()
+                
+            sa.event.listen(engine, 'connect', set_lite_optimizer)
+            
+            print("✅ Conectado a SQLite (Optimizado)")
         
         return engine
     
@@ -190,6 +207,10 @@ class DatabaseManager:
             )
             session.add(libro)
             session.commit()
+            
+            # Invalidate cache
+            self._libros_cache = None
+            
             return libro.id
         except Exception as e:
             session.rollback()
@@ -383,10 +404,18 @@ class DatabaseManager:
                     try:
                         fragmento_dict['embedding'] = np.frombuffer(frag.embedding, dtype=np.float32).tolist()
                     except Exception as e:
-                        print(f"⚠️ Error convirtiendo embedding: {e}")
+                        print(f"⚠️ Error convirtiendo embedding ID {frag.id}: {e}")
                         fragmento_dict['embedding'] = None
+                else:
+                    # DEBUG: Imprimir si falta embedding
+                    # print(f"⚠️ Fragmento ID {frag.id} del libro {frag.libro_id} NO TIENE embedding en BD")
+                    fragmento_dict['embedding'] = None
                 
                 resultado.append(fragmento_dict)
+            
+            # DEBUG INFO
+            con_emb = len([f for f in resultado if f.get('embedding')])
+            print(f"✅ DB: Obtenidos {len(resultado)} fragmentos para libros {libros_ids}. {con_emb} tienen embeddings.")
             
             return resultado
             
