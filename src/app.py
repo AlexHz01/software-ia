@@ -65,15 +65,9 @@ class BibliotecaAppManager(QObject):
         
         try:
             # Importar las aplicaciones
-            from views.apps.dashboard_app import DashboardApp
             from views.apps.biblioteca_app import BibliotecaApp
             from views.apps.config_app import ConfigApp
             from views.apps.transcripcion_app import TranscripcionApp
-            
-            # Dashboard principal
-            dashboard_app = DashboardApp()
-            self.nav_controller.register_app("dashboard", dashboard_app)
-            self.logger.info("✅ Dashboard registrado")
             
             # Aplicación de Biblioteca
             biblioteca_app = BibliotecaApp()
@@ -124,12 +118,14 @@ class BibliotecaAppManager(QObject):
                 self.logger.error("❌ No hay aplicaciones disponibles")
                 return
                 
-            # Cargar el dashboard por defecto
-            dashboard_app = self.nav_controller.get_app("dashboard")
-            if dashboard_app:
-                self.main_window.show_app(dashboard_app)
-                self.nav_controller.set_current_app("dashboard")
-                self.logger.info("🏠 Aplicación inicial configurada: Dashboard")
+            # Cargar la biblioteca por defecto
+            initial_app_name = "biblioteca"
+            initial_app = self.nav_controller.get_app(initial_app_name)
+            
+            if initial_app:
+                self.main_window.show_app(initial_app)
+                self.nav_controller.set_current_app(initial_app_name)
+                self.logger.info("🏠 Aplicación inicial configurada: Biblioteca IA")
             else:
                 # Fallback: cargar la primera aplicación disponible
                 first_app_name = list(apps.keys())[0]

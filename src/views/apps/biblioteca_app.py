@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (QVBoxLayout, QHBoxLayout, QPushButton, QListWidget,
                              QDialog, QFormLayout, QDialogButtonBox, QListWidgetItem,
                              QComboBox, QScrollArea, QSizePolicy, QSpacerItem, QInputDialog,
                              QCheckBox)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QPoint
 from PyQt5.QtGui import QFont, QIcon
 from typing import List, Dict, Tuple
 from datetime import datetime
@@ -182,13 +182,27 @@ class HistoryItemWidget(QWidget):
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(4)
         
-        # Pregunta (truncada)
-        pregunta = self.consulta['pregunta']
-        if len(pregunta) > 60:
-            pregunta = pregunta[:57] + "..."
+        # Pregunta o Título (prioridad al título)
+        mostrar_texto = self.consulta.get('titulo')
+        es_personalizado = False
         
-        self.label_pregunta = QLabel(pregunta)
-        self.label_pregunta.setStyleSheet("font-weight: bold; color: #2c3e50; font-size: 12px;")
+        if not mostrar_texto:
+            mostrar_texto = self.consulta['pregunta']
+        else:
+            es_personalizado = True
+            
+        if len(mostrar_texto) > 60:
+            mostrar_texto = mostrar_texto[:57] + "..."
+        
+        # Si es personalizado, añadir un icono sutil
+        prefix = "🏷️ " if es_personalizado else ""
+        
+        self.label_pregunta = QLabel(f"{prefix}{mostrar_texto}")
+        self.label_pregunta.setStyleSheet(f"""
+            font-weight: bold; 
+            color: {'#2980b9' if es_personalizado else '#2c3e50'}; 
+            font-size: 12px;
+        """)
         self.label_pregunta.setWordWrap(True)
         layout.addWidget(self.label_pregunta)
         
@@ -198,6 +212,15 @@ class HistoryItemWidget(QWidget):
         self.label_fecha.setStyleSheet("color: #7f8c8d; font-size: 10px;")
         layout.addWidget(self.label_fecha)
         
+        # Títulos de libros (NUEVO)
+        if self.consulta.get('libros_titulos'):
+            titulos = ", ".join(self.consulta['libros_titulos'])
+            if len(titulos) > 40:
+                titulos = titulos[:37] + "..."
+            self.label_libros = QLabel(f"📚 {titulos}")
+            self.label_libros.setStyleSheet("color: #34495e; font-size: 11px; font-style: italic;")
+            layout.addWidget(self.label_libros)
+
         # Línea separadora
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
@@ -849,9 +872,9 @@ class BibliotecaApp(BaseApp):
     def __init__(self):
         super().__init__()
         # Conectar señales
-        self.respuesta_lista.connect(self.actualizar_respuesta_ui)
-        self.habilitar_boton.connect(self.rehabilitar_boton_ui)
-        self.error_ocurrido.connect(self.mostrar_error_consulta)
+        self.respuesta_lista.connect(self.actualizar_respuesta_chat)
+        self.habilitar_boton.connect(self.rehabilitar_chat_input)
+        self.error_ocurrido.connect(self.mostrar_error_chat)
         
         # Inicializar managers
         self.db_manager = DatabaseManager()
@@ -872,12 +895,10 @@ class BibliotecaApp(BaseApp):
         # Timer para debouncing de búsqueda
         self.search_timer = QTimer()
         self.search_timer.setSingleShot(True)
-        self.search_timer.timeout.connect(self.actualizar_lista_libros)
+        # self.search_timer.timeout.connect(self.actualizar_lista_libros) # Obsoleto
         
         self.setup_ui()
-        self.setup_legal_templates()
         self.actualizar_estadisticas()
-        self.actualizar_lista_libros()
         
     def get_title(self):
         return "Biblioteca IA"
@@ -927,6 +948,8 @@ class BibliotecaApp(BaseApp):
         
         # Lista de historial
         self.lista_historial = QListWidget()
+        self.lista_historial.setContextMenuPolicy(Qt.CustomContextMenu) # Habilitar menú contextual
+        self.lista_historial.customContextMenuRequested.connect(self.show_history_context_menu)
         self.lista_historial.setStyleSheet("""
             QListWidget {
                 border: none;
@@ -1022,6 +1045,61 @@ class BibliotecaApp(BaseApp):
         self.label_ambito_actual = QLabel("📚 Todos los libros")
         self.label_ambito_actual.setStyleSheet("font-size: 11px; color: #7f8c8d; font-style: italic; margin-left: 5px;")
         header_layout.addWidget(self.label_ambito_actual)
+
+        # --- INDICADORES DE ANÁLISIS ---
+        header_layout.addSpacing(15)
+        self.status_indicators = QWidget()
+        status_layout = QHBoxLayout(self.status_indicators)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.setSpacing(8)
+
+        self.lbl_status_guia = QLabel("✨")
+        self.lbl_status_guia.setToolTip("Guía de Fuente")
+        self.lbl_status_podcast = QLabel("🎧")
+        self.lbl_status_podcast.setToolTip("Deep Dive (Podcast)")
+        self.lbl_status_mapa = QLabel("🗺️")
+        self.lbl_status_mapa.setToolTip("Mapa Mental")
+        self.lbl_status_informe = QLabel("📄")
+        self.lbl_status_informe.setToolTip("Informe de Estudio")
+        self.lbl_status_cuestionario = QLabel("📝")
+        self.lbl_status_cuestionario.setToolTip("Cuestionario")
+        
+        self.all_indicators = [
+            self.lbl_status_guia, self.lbl_status_podcast, 
+            self.lbl_status_mapa, self.lbl_status_informe, 
+            self.lbl_status_cuestionario
+        ]
+        
+        for lbl in self.all_indicators:
+            lbl.setStyleSheet("font-size: 14px; color: #bdc3c7;") # Gris claro por defecto (no generado)
+            status_layout.addWidget(lbl)
+        
+        # Botón Mágico: Notebook Studio
+        self.btn_studio = QPushButton("🪄 Studio")
+        self.btn_studio.setToolTip("Generar Mapa Mental, Informe o Cuestionario")
+        self.btn_studio.setCursor(Qt.PointingHandCursor)
+        self.btn_studio.setStyleSheet("""
+            QPushButton {
+                background-color: #9b59b6;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #8e44ad;
+            }
+            QPushButton:disabled {
+                background-color: #bdc3c7;
+            }
+        """)
+        self.btn_studio.clicked.connect(self.show_studio_menu)
+        header_layout.addWidget(self.btn_studio)
+        
+        header_layout.addWidget(self.status_indicators)
+        self.status_indicators.hide() 
+        self.btn_studio.hide()
         
         header_layout.addStretch()
         
@@ -1044,6 +1122,65 @@ class BibliotecaApp(BaseApp):
         """)
         btn_manager.clicked.connect(self.on_open_library_manager)
         header_layout.addWidget(btn_manager)
+
+        header_layout.addSpacing(5)
+
+        # Botón Nuevo Chat
+        self.btn_new_chat = QPushButton("🆕 Nuevo Chat")
+        self.btn_new_chat.setToolTip("Limpiar chat y resetear contexto")
+        self.btn_new_chat.setCursor(Qt.PointingHandCursor)
+        self.btn_new_chat.setStyleSheet("""
+            QPushButton {
+                background-color: #ecf0f1;
+                color: #2c3e50;
+                border: 1px solid #bdc3c7;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #dee2e6;
+            }
+        """)
+        self.btn_new_chat.clicked.connect(self.on_nuevo_chat)
+        header_layout.addWidget(self.btn_new_chat)
+
+        # --- BOTONES NOTEBOOKLM ---
+        header_layout.addSpacing(10)
+        
+        self.btn_source_guide = QPushButton("✨ Guía de Fuente")
+        self.btn_source_guide.setToolTip("Generar resumen y temas clave")
+        self.btn_source_guide.setStyleSheet("""
+            QPushButton {
+                background-color: #f1c40f;
+                color: #2c3e50;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #f39c12; }
+            QPushButton:disabled { background-color: #ecf0f1; color: #bdc3c7; }
+        """)
+        self.btn_source_guide.clicked.connect(self.on_generar_guia_fuente)
+        header_layout.addWidget(self.btn_source_guide)
+
+        self.btn_deep_dive = QPushButton("🎧 Deep Dive")
+        self.btn_deep_dive.setToolTip("Generar guion de podcast")
+        self.btn_deep_dive.setStyleSheet("""
+            QPushButton {
+                background-color: #9b59b6;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #8e44ad; }
+            QPushButton:disabled { background-color: #ecf0f1; color: #bdc3c7; }
+        """)
+        self.btn_deep_dive.clicked.connect(self.on_generar_deep_dive)
+        header_layout.addWidget(self.btn_deep_dive)
         
         # Botón para agregar libro (DIRECTO) - Mantenido pero reducido, o eliminado si preferimos todo en el gestor
         # Vamos a dejar solo el gestor para limpiar, así que eliminamos btn_add explícito aquí
@@ -1237,15 +1374,101 @@ class BibliotecaApp(BaseApp):
             self.add_user_message(consulta['pregunta'])
             self.add_ai_message(consulta['respuesta'])
             
-            # Si hay libros referenciados, podríamos seleccionarlos
+            # Si hay libros referenciados, restaurar el contexto
             if consulta['libros_referenciados']:
                 self.libros_consulta = consulta['libros_referenciados']
-                count = len(self.libros_consulta)
-                if count == 1:
-                    # Intentar obtener título si es posible, si no mostrar genérico
-                    self.label_ambito_actual.setText(f"📖 Libro restaurado del historial")
+                titulos = consulta.get('libros_titulos', [])
+                if titulos:
+                    if len(titulos) == 1:
+                        self.label_ambito_actual.setText(f"📖 {titulos[0]}")
+                    else:
+                        self.label_ambito_actual.setText(f"🎯 {len(titulos)} libros (historial)")
                 else:
-                    self.label_ambito_actual.setText(f"🎯 {count} libros (historial)")
+                    self.label_ambito_actual.setText(f"🎯 {len(self.libros_consulta)} libros (historial)")
+                
+                self.actualizar_indicadores_analisis()
+            else:
+                self.libros_consulta = None
+                self.label_ambito_actual.setText("📚 Todos los libros")
+                self.actualizar_indicadores_analisis()
+
+    def show_history_context_menu(self, pos):
+        """Mostrar menú contextual para elementos del historial"""
+        item = self.lista_historial.itemAt(pos)
+        if not item:
+            return
+            
+        from PyQt5.QtWidgets import QMenu
+        menu = QMenu(self)
+        
+        rename_action = menu.addAction("✏️ Cambiar Nombre")
+        delete_action = menu.addAction("🗑️ Eliminar")
+        
+        # Estilizar menú
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: white;
+                border: 2px solid #3498db;
+                border-top: none;
+                border-radius: 4px;
+            }
+            QMenu::item {
+                padding: 8px 25px;
+                color: #2c3e50;
+            }
+            QMenu::item:selected {
+                background-color: #3498db;
+                color: white;
+            }
+        """)
+        
+        action = menu.exec_(self.lista_historial.mapToGlobal(pos))
+        
+        if action == rename_action:
+            self.rename_history_item(item)
+        elif action == delete_action:
+            self.delete_history_item(item)
+
+    def rename_history_item(self, item):
+        """Abrir diálogo para renombrar un elemento del historial"""
+        consulta_id = item.data(Qt.UserRole)
+        
+        # Obtener datos actuales
+        historial = self.db_manager.obtener_historial_consultas()
+        consulta = next((c for c in historial if c['id'] == consulta_id), None)
+        
+        if not consulta:
+            return
+            
+        from PyQt5.QtWidgets import QInputDialog
+        nombre_actual = consulta.get('titulo') or ""
+        
+        nuevo_nombre, ok = QInputDialog.getText(
+            self, "Renombrar Historial", 
+            "Ingresa un nombre para esta consulta:",
+            text=nombre_actual
+        )
+        
+        if ok and nuevo_nombre:
+            if self.db_manager.actualizar_titulo_consulta(consulta_id, nuevo_nombre):
+                self.actualizar_lista_historial()
+                self.add_system_message(f"Historial renombrado a: {nuevo_nombre}")
+
+    def delete_history_item(self, item):
+        """Eliminar un elemento específico del historial"""
+        consulta_id = item.data(Qt.UserRole)
+        
+        from PyQt5.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self, "Confirmar eliminación",
+            "¿Estás seguro de que deseas eliminar esta consulta del historial?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            if self.db_manager.eliminar_consulta(consulta_id):
+                self.actualizar_lista_historial()
+                self.add_system_message("Consulta eliminada del historial.")
 
     def on_clear_history(self):
         """Limpiar todo el historial (con confirmación)"""
@@ -1262,292 +1485,243 @@ class BibliotecaApp(BaseApp):
             self.actualizar_lista_historial()
             QMessageBox.information(self, "Éxito", "Historial eliminado correctamente.")
 
-    def setup_legal_templates(self):
-        """Configurar plantillas de análisis jurídico"""
-        # Añadir un botón de plantillas al área de chat
-        self.templates_btn = QPushButton("📋 Plantillas Jurídicas")
-        self.templates_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f39c12;
-                color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 5px;
-                font-weight: bold;
-                margin-bottom: 5px;
-            }
-            QPushButton:hover {
-                background-color: #e67e22;
-            }
-        """)
-        
-        # Crear menú de plantillas
-        from PyQt5.QtWidgets import QMenu
-        self.templates_menu = QMenu(self)
-        
-        templates = [
-            ("Resumen de Hechos", "Realiza un resumen ejecutivo de los hechos más relevantes encontrados en el documento."),
-            ("Identificación de Riesgos", "Identifica posibles riesgos procesales o legales mencionados en el texto."),
-            ("Fundamentación Legal", "Extrae y analiza la fundamentación legal (leyes, artículos, jurisprudencia) citada."),
-            ("Extracción de Entidades", "Extrae una lista de las partes involucradas, fechas clave y montos mencionados.")
-        ]
-        
-        for nombre, prompt in templates:
-            action = self.templates_menu.addAction(nombre)
-            action.triggered.connect(lambda checked, p=prompt: self.aplicar_plantilla(p))
-        
-        self.templates_btn.setMenu(self.templates_menu)
-        
-        # Insertar el botón antes del chat_input
-        # Necesitamos encontrar el layout correcto
-        self.chat_input.layout().insertWidget(0, self.templates_btn)
 
-    def aplicar_plantilla(self, prompt):
-        """Aplicar una plantilla al chat"""
-        self.chat_input.input_field.setText(prompt)
-        self.chat_input.input_field.setFocus()
+    def on_nuevo_chat(self):
+        """Limpiar el chat y resetear el contexto"""
+        self.chat_history.clear()
+        self.libros_consulta = None
+        self.label_ambito_actual.setText("📚 Todos los libros")
+        self.add_system_message("Nuevo chat iniciado. Contexto reseteado a toda la biblioteca.")
+        self.actualizar_indicadores_analisis()
 
-    def actualizar_lista_libros(self):
-        """Actualizar la lista de libros con filtros y ordenamiento"""
-        self.lista_libros.clear()
+    def actualizar_indicadores_analisis(self):
+        """Actualizar los iconos de estado de análisis según la selección"""
+        # Regla de Oro: Solo mostrar si hay exactamente UN libro seleccionado
+        if not self.libros_consulta or len(self.libros_consulta) != 1:
+            self.status_indicators.hide()
+            self.btn_studio.hide()
+            # Ocultar botones avanzados de NotebookLM si hay varios o ninguno
+            self.btn_source_guide.hide()
+            self.btn_deep_dive.hide()
+            return
         
-        # Obtener todos los libros
+        # Mostrar botones solo para single book selection
+        self.btn_source_guide.show()
+        self.btn_deep_dive.show()
+        self.btn_studio.show()
+        self.status_indicators.show()
+        
+        # Obtener libro seleccionado
         libros = self.db_manager.obtener_libros()
+        libro = next((l for l in libros if l['id'] == self.libros_consulta[0]), None)
         
-        # Aplicar filtro de búsqueda
-        texto_busqueda = self.barra_busqueda.text().lower()
-        if texto_busqueda:
-            self.libros_filtrados = [
-                libro for libro in libros 
-                if texto_busqueda in libro['titulo'].lower() or 
-                   (libro['autor'] and texto_busqueda in libro['autor'].lower())
-            ]
-        else:
-            self.libros_filtrados = libros
-        
-        # Aplicar ordenamiento
-        orden = self.combo_orden.currentText()
-        if orden == "Orden: A-Z":
-            self.libros_filtrados.sort(key=lambda x: x['titulo'].lower())
-        elif orden == "Orden: Z-A":
-            self.libros_filtrados.sort(key=lambda x: x['titulo'].lower(), reverse=True)
-        elif orden == "Recientes":
-            self.libros_filtrados.sort(key=lambda x: x['fecha_procesado'] or '', reverse=True)
-        elif orden == "Antiguos":
-            self.libros_filtrados.sort(key=lambda x: x['fecha_procesado'] or '')
-        elif orden == "Más fragmentos":
-            self.libros_filtrados.sort(key=lambda x: x['total_fragmentos'], reverse=True)
-        
-        # Llenar la lista
-        for libro in self.libros_filtrados:
-            item_text = f"{libro['titulo']}"
-            if libro['autor']:
-                item_text += f" - {libro['autor']}"
-            
-            item = QListWidgetItem(item_text)
-            item.setData(Qt.UserRole, libro['id'])
-            self.lista_libros.addItem(item)
-        
-        # Actualizar contador
-        total = len(libros)
-        filtrados = len(self.libros_filtrados)
-        if filtrados == total:
-            self.contador_libros.setText(f"{total} libros")
-        else:
-            self.contador_libros.setText(f"{filtrados} de {total} libros")
-        
-        # Actualizar navegación
-        self.actualizar_navegacion()
-
-    def on_search_text_changed(self):
-        """Manejador para cambio de texto con debouncing"""
-        self.search_timer.start(300)  # 300ms de delay
-
-    def filtrar_libros(self):
-        """Filtrar libros en tiempo real según la búsqueda (ahora vía timer)"""
-        self.actualizar_lista_libros()
-    
-    def toggle_books_section(self):
-        """Colapsar/expandir la sección de libros"""
-        self.books_section_visible = not self.books_section_visible
-        
-        if self.books_section_visible:
-            self.books_content.show()
-            self.books_widget.setMaximumHeight(250)
-            self.btn_toggle_books.setText("📚 Tus Libros ▼")
-        else:
-            self.books_content.hide()
-            self.books_widget.setMaximumHeight(40)  # Solo altura del botón
-            self.btn_toggle_books.setText("📚 Tus Libros ▶")
-
-    def actualizar_navegacion(self):
-        """Actualizar estado de los botones de navegación"""
-        total = len(self.libros_filtrados)
-        seleccionados = self.lista_libros.selectedItems()
-        
-        if seleccionados:
-            current_item = seleccionados[0]
-            self.indice_actual = self.lista_libros.row(current_item)
-        else:
-            self.indice_actual = -1
-        
-        # Habilitar/deshabilitar botones
-        self.btn_primero.setEnabled(total > 0 and self.indice_actual > 0)
-        self.btn_anterior.setEnabled(total > 0 and self.indice_actual > 0)
-        self.btn_siguiente.setEnabled(total > 0 and self.indice_actual < total - 1)
-        self.btn_ultimo.setEnabled(total > 0 and self.indice_actual < total - 1)
-
-    def navegar_libros(self):
-        """Navegar entre libros usando los botones"""
-        sender = self.sender()
-        total = len(self.libros_filtrados)
-        
-        if total == 0:
-            return
-        
-        if sender == self.btn_primero:
-            nuevo_indice = 0
-        elif sender == self.btn_anterior:
-            nuevo_indice = max(0, self.indice_actual - 1)
-        elif sender == self.btn_siguiente:
-            nuevo_indice = min(total - 1, self.indice_actual + 1)
-        elif sender == self.btn_ultimo:
-            nuevo_indice = total - 1
-        else:
-            return
-        
-        if 0 <= nuevo_indice < total:
-            self.lista_libros.setCurrentRow(nuevo_indice)
-            self.lista_libros.scrollToItem(self.lista_libros.item(nuevo_indice))
-            self.actualizar_ambito_automatico()
-
-    def on_libro_doble_click(self, item):
-        """Al hacer doble click en un libro"""
-        libro_id = item.data(Qt.UserRole)
-        self.mostrar_detalles_libro(libro_id)
-
-    def on_libro_seleccionado(self):
-        """Cuando se selecciona un libro de la lista"""
-        self.actualizar_navegacion()
-        
-        items = self.lista_libros.selectedItems()
-        if not items:
-            self.info_libro_label.setText("Selecciona un libro para ver detalles")
-            return
-        
-        libro_id = items[0].data(Qt.UserRole)
-        libro = next((l for l in self.libros_filtrados if l['id'] == libro_id), None)
-        
-        if libro:
-            info_text = (
-                f"<b>{libro['titulo']}</b>\n"
-                f"Autor: {libro['autor'] or 'No especificado'}\n"
-                f"Páginas: {libro['total_paginas']}\n"
-                f"Fragmentos: {libro['total_fragmentos']}\n"
-                f"Procesado: {libro['fecha_procesado'].strftime('%d/%m/%Y') if libro['fecha_procesado'] else 'N/A'}"
-            )
-            self.info_libro_label.setText(info_text)
-            
-            # 🔄 ACTUALIZAR AUTOMÁTICAMENTE EL ÁMBITO
-            self.actualizar_ambito_automatico()
-
-    def mostrar_busqueda_avanzada(self):
-        """Mostrar diálogo de búsqueda avanzada"""
-        texto, ok = QInputDialog.getText(
-            self, 
-            "Búsqueda Avanzada", 
-            "Buscar libro por título, autor o contenido:\n\n"
-            "• Use * como comodín\n"
-            "• Use comillas para frases exactas\n"
-            "• Ejemplo: \"ciencia ficción\" *espacio*",
-            text=self.barra_busqueda.text()
-        )
-        
-        if ok and texto:
-            self.barra_busqueda.setText(texto)
-
-    def mostrar_consultas_rapidas(self):
-        """Mostrar menú de consultas rápidas predefinidas"""
-        consultas = [
-            "¿Cuáles son los temas principales de mis libros?",
-            "Resumen los conceptos más importantes",
-            "¿Qué libros hablan sobre inteligencia artificial?",
-            "Encuentra información sobre machine learning",
-            "Compara los diferentes enfoques encontrados"
-        ]
-        
-        consulta, ok = QInputDialog.getItem(
-            self,
-            "Consultas Rápidas",
-            "Selecciona una consulta predefinida:",
-            consultas,
-            0,
-            False
-        )
-        
-        if ok and consulta:
-            self.chat_input.input_field.setText(consulta)
-            self.chat_input.input_field.setFocus()
-
-    def mostrar_detalles_libro(self, libro_id):
-        """Mostrar diálogo con detalles completos del libro"""
-        libro = next((l for l in self.libros_filtrados if l['id'] == libro_id), None)
         if not libro:
+            self.status_indicators.hide()
             return
-        
-        dialog = QDialog(self)
-        dialog.setWindowTitle(f"Detalles: {libro['titulo']}")
-        dialog.resize(500, 400)
-        
-        layout = QVBoxLayout(dialog)
-        
-        # Información detallada
-        info_text = f"""
-        <h3>{libro['titulo']}</h3>
-        <p><b>Autor:</b> {libro['autor'] or 'No especificado'}</p>
-        <p><b>Total de páginas:</b> {libro['total_paginas']}</p>
-        <p><b>Fragmentos generados:</b> {libro['total_fragmentos']}</p>
-        <p><b>Fecha de procesamiento:</b> {libro['fecha_procesado'].strftime('%d/%m/%Y %H:%M') if libro['fecha_procesado'] else 'N/A'}</p>
-        <p><b>ID del libro:</b> {libro['id']}</p>
-        """
-        
-        label_info = QLabel(info_text)
-        label_info.setWordWrap(True)
-        layout.addWidget(label_info)
-        
-        # Botones de acción
-        btn_layout = QHBoxLayout()
-        
-        btn_consultar = QPushButton("📖 Consultar este libro")
-        btn_consultar.clicked.connect(lambda: self.consultar_libro_especifico(libro['titulo'], dialog))
-        
-        btn_cerrar = QPushButton("Cerrar")
-        btn_cerrar.clicked.connect(dialog.close)
-        
-        btn_layout.addWidget(btn_consultar)
-        btn_layout.addWidget(btn_cerrar)
-        layout.addLayout(btn_layout)
-        
-        dialog.exec_()
+            
+        # Actualizar colores/checkmarks según lo que ya existe
+        def set_status(lbl, exists, tool_tip_base):
+            if exists:
+                lbl.setStyleSheet("font-size: 14px; color: #f1c40f;") # Dorado/Activo
+                lbl.setToolTip(f"{tool_tip_base} (Disponible)")
+            else:
+                lbl.setStyleSheet("font-size: 14px; color: #bdc3c7;") # Gris (No generado)
+                lbl.setToolTip(f"{tool_tip_base} (No generado)")
 
-    def consultar_libro_especifico(self, titulo_libro, dialog):
-        """Preparar consulta específica para un libro"""
-        dialog.close()
-        consulta = f"sobre el libro '{titulo_libro}': "
-        self.input_pregunta.setText(consulta)
-        self.input_pregunta.setFocus()
-        self.input_pregunta.setSelection(len(consulta), len(consulta))
+        set_status(self.lbl_status_guia, libro.get('guia_fuente'), "Guía de Fuente")
+        set_status(self.lbl_status_podcast, libro.get('guion_podcast'), "Deep Dive (Podcast)")
+        set_status(self.lbl_status_mapa, libro.get('mapa_mental'), "Mapa Mental")
+        set_status(self.lbl_status_informe, libro.get('informe_estudio'), "Informe de Estudio")
+        set_status(self.lbl_status_cuestionario, libro.get('cuestionario'), "Cuestionario")
 
     def on_open_library_manager(self):
         """Abrir diálogo de gestión de biblioteca"""
         dialog = LibraryManagerDialog(self, self.db_manager, self)
         dialog.exec_()
 
+    def show_studio_menu(self):
+        """Mostrar menú con opciones avanzadas de Notebook Studio"""
+        from PyQt5.QtWidgets import QMenu
+        menu = QMenu(self)
+        
+        # Obtener libro actual para chequear qué ya existe
+        libros = self.db_manager.obtener_libros()
+        libro = next((l for l in libros if l['id'] == self.libros_consulta[0]), None) if self.libros_consulta else None
+        
+        def get_text(base, field):
+            return f"✅ {base}" if libro and libro.get(field) else base
+
+        mapa_action = menu.addAction(get_text("🗺️ Generar Mapa Mental", "mapa_mental"))
+        informe_action = menu.addAction(get_text("📄 Generar Informe Pro", "informe_estudio"))
+        quiz_action = menu.addAction(get_text("📝 Generar Cuestionario", "cuestionario"))
+        
+        # Estilo Studio (Púrpura)
+        menu.setStyleSheet("""
+            QMenu { background-color: white; border: 1px solid #9b59b6; border-radius: 4px; }
+            QMenu::item { padding: 8px 20px; }
+            QMenu::item:selected { background-color: #9b59b6; color: white; }
+        """)
+        
+        action = menu.exec_(self.btn_studio.mapToGlobal(QPoint(0, self.btn_studio.height())))
+        
+        if action == mapa_action:
+            self.generar_studio_output("mapa")
+        elif action == informe_action:
+            self.generar_studio_output("informe")
+        elif action == quiz_action:
+            self.generar_studio_output("cuestionario")
+
+    def generar_studio_output(self, tipo):
+        """Flujo de generación para Notebook Studio"""
+        if not self.libros_consulta or len(self.libros_consulta) != 1:
+            return
+            
+        libro_id = self.libros_consulta[0]
+        libros = self.db_manager.obtener_libros()
+        libro = next((l for l in libros if l['id'] == libro_id), None)
+        
+        # Verificar caché primero
+        field_map = {"mapa": "mapa_mental", "informe": "informe_estudio", "cuestionario": "cuestionario"}
+        emoji_map = {"mapa": "🗺️", "informe": "📄", "cuestionario": "📝"}
+        title_map = {"mapa": "Mapa Mental", "informe": "Informe Profesional", "cuestionario": "Cuestionario de Autoevaluación"}
+        
+        field = field_map[tipo]
+        if libro and libro.get(field):
+            content = libro[field]
+            self.add_system_message(f"Recuperando {title_map[tipo]} guardado...")
+            if tipo == "mapa":
+                # Envolver Mermaid para la UI
+                self.add_ai_message(f"### {emoji_map[tipo]} {title_map[tipo]} (Mermaid)\n\n```mermaid\n{content}\n```")
+            else:
+                self.add_ai_message(f"### {emoji_map[tipo]} {title_map[tipo]}\n\n{content}")
+            return
+
+        self.add_system_message(f"🪄 Studio: Generando {title_map[tipo]}... (puede tardar unos segundos)")
+        self.chat_input.set_enabled(False)
+        
+        def run():
+            try:
+                fragmentos = self.db_manager.obtener_fragmentos_por_libros([libro_id])
+                
+                if tipo == "mapa":
+                    output = self.query_processor.generar_mapa_mental(fragmentos)
+                elif tipo == "informe":
+                    output = self.query_processor.generar_informe(fragmentos)
+                else:
+                    output = self.query_processor.generar_cuestionario(fragmentos)
+                
+                # Guardar en BD
+                self.db_manager.actualizar_studio_libro(libro_id, tipo, output)
+                
+                header = f"### {emoji_map[tipo]} {title_map[tipo]}"
+                if tipo == "mapa":
+                    # Limpiar Mermaid si viene con bloques de código
+                    output = output.replace("```mermaid", "").replace("```", "").strip()
+                    self.respuesta_lista.emit(f"{header}\n\n```mermaid\n{output}\n```")
+                else:
+                    self.respuesta_lista.emit(f"{header}\n\n{output}")
+                    
+                # Forzar actualización de indicadores
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(100, lambda: self.actualizar_indicadores_analisis())
+                
+            except Exception as e:
+                self.error_ocurrido.emit(str(e))
+            finally:
+                self.habilitar_boton.emit()
+
+        threading.Thread(target=run).start()
+
+    def on_generar_guia_fuente(self):
+        """Generar y mostrar la Guía de Fuente (Solo Single Book)"""
+        if not self.libros_consulta or len(self.libros_consulta) != 1:
+            QMessageBox.warning(self, "Atención", "Selecciona exactamente un libro para la Guía de Fuente.")
+            return
+
+        libros = self.db_manager.obtener_libros()
+
+        libros_a_procesar = [l for l in libros if l['id'] in self.libros_consulta]
+        
+        # --- LÓGICA DE CACHÉ / PERSISTENCIA ---
+        if len(libros_a_procesar) == 1:
+            libro = libros_a_procesar[0]
+            if libro.get('guia_fuente'):
+                self.add_system_message(f"Recuperando guía guardada para: {libro['titulo']}")
+                self.add_ai_message(f"### ✨ Guía de Fuente (Guardada)\n\n{libro['guia_fuente']}")
+                return
+
+        self.add_system_message(f"Generando Guía de Fuente para {len(libros_a_procesar)} libro(s)...")
+        self.chat_input.set_enabled(False)
+        
+        def run():
+            try:
+                if self.libros_consulta:
+                    fragmentos = self.db_manager.obtener_fragmentos_por_libros(self.libros_consulta)
+                else:
+                    fragmentos = self.db_manager.obtener_todos_fragmentos()
+                
+                guia = self.query_processor.generar_guia_fuente(libros_a_procesar, fragmentos)
+                
+                # Guardar si es un solo libro
+                if len(libros_a_procesar) == 1:
+                    self.db_manager.actualizar_guia_fuente(libros_a_procesar[0]['id'], guia)
+                
+                self.respuesta_lista.emit(f"### ✨ Guía de Fuente\n\n{guia}")
+            except Exception as e:
+                self.error_ocurrido.emit(str(e))
+            finally:
+                self.habilitar_boton.emit()
+
+        threading.Thread(target=run).start()
+
+    def on_generar_deep_dive(self):
+        """Generar un guion de podcast (Deep Dive) - Solo Single Book"""
+        if not self.libros_consulta or len(self.libros_consulta) != 1:
+            QMessageBox.warning(self, "Atención", "Selecciona exactamente un libro para generar un Deep Dive.")
+            return
+
+        libros = self.db_manager.obtener_libros()
+
+        libros_a_procesar = [l for l in libros if l['id'] in self.libros_consulta]
+
+        # --- CACHÉ PARA DEEP DIVE (Solo si es 1 libro) ---
+        if len(libros_a_procesar) == 1:
+            libro = libros_a_procesar[0]
+            if libro.get('guion_podcast'):
+                self.add_system_message(f"Recuperando Deep Dive guardado para: {libro['titulo']}")
+                self.add_ai_message(f"### 🎧 Deep Dive (Guardado)\n\n{libro['guion_podcast']}")
+                return
+
+        self.add_system_message("Sumergiéndome en los documentos para generar un Deep Dive (Podcast)...")
+        self.chat_input.set_enabled(False)
+
+        def run():
+            try:
+                if self.libros_consulta:
+                    fragmentos = self.db_manager.obtener_fragmentos_por_libros(self.libros_consulta)
+                else:
+                    fragmentos = self.db_manager.obtener_todos_fragmentos()
+                
+                guion = self.query_processor.generar_guion_podcast(fragmentos)
+
+                # Guardar si es un solo libro
+                if self.libros_consulta and len(self.libros_consulta) == 1:
+                    self.db_manager.actualizar_guion_podcast(self.libros_consulta[0], guion)
+
+                self.respuesta_lista.emit(f"### 🎧 Deep Dive (Podcast Script)\n\n{guion}")
+            except Exception as e:
+                self.error_ocurrido.emit(str(e))
+            finally:
+                self.habilitar_boton.emit()
+
+        threading.Thread(target=run).start()
+
     def set_current_book_context(self, book_id, title):
         """Establecer un libro específico como contexto del chat desde el Manager"""
         self.libros_consulta = [book_id]
         self.label_ambito_actual.setText(f"📖 {title}")
         self.set_info_status(f"Contexto: {title}")
+        self.actualizar_indicadores_analisis()
 
     def set_info_status(self, text):
         # Helper simple para mostrar estado
@@ -1559,46 +1733,17 @@ class BibliotecaApp(BaseApp):
             self.libros_consulta = None
             self.label_ambito_actual.setText("📚 Todos los libros")
             self.set_info_status("Búsqueda en toda la biblioteca")
+            self.actualizar_indicadores_analisis()
             
-        elif ambito == "Seleccionar libros...":
-            # REVERTIR la selección en el combo visualmente para que no se quede en "Seleccionar..."
-            # si el usuario cancela. O dejarlo.
-            self.seleccionar_libros_consulta()
-            
-        elif ambito == "Libro actual":
-            # Si no hay libro seleccionado, volver a todos
-            if not self.libros_consulta:
-                self.combo_ambito.setCurrentText("Todos los libros")
-        """Cambiar el ámbito de búsqueda para las consultas"""
-        if ambito == "Todos los libros":
-            self.libros_consulta = None
-            self.label_ambito_actual.setText("📚 Todos los libros")
-            
-        elif ambito == "Libro actual":
-            # YA NO SOPORTADO DIRECTAMENTE desde la main UI porque no hay selección
-            # Podríamos abrir un selector rápido o simplemente advertir
-            QMessageBox.information(self, "Info", "Usa 'Gestionar Biblioteca' o 'Seleccionar libros' para filtrar.")
-            self.combo_ambito.setCurrentText("Todos los libros")
-                
         elif ambito == "Libros seleccionados...":
             self.seleccionar_libros_consulta()
+            
+        elif ambito == "Libro actual":
+            QMessageBox.information(self, "Info", "Usa 'Gestionar Biblioteca' o 'Seleccionar libros' para filtrar.")
 
     def actualizar_ambito_automatico(self):
         # Desactivado - ya no hay lista seleccionable en main UI
         pass
-
-    # ============ MÉTODOS OBSOLETOS (STUBS) ============
-    # Mantenidos vacíos por si acaso alguna señal pendiente los llama, 
-    # pero deberían ser eliminados en una limpieza profunda.
-
-    def actualizar_lista_libros(self): pass
-    def navigation_libros(self): pass # Typo in original? No, it was navegar_libros
-    def navegar_libros(self): pass
-    def on_libro_doble_click(self, item): pass
-    def on_libro_seleccionado(self): pass
-    def on_search_text_changed(self): pass
-    def toggle_books_section(self): pass
-    def mostrar_detalles_libro(self, id): pass
     
     # ===================================================
 
@@ -1608,7 +1753,7 @@ class BibliotecaApp(BaseApp):
         libros = self.db_manager.obtener_libros(force_refresh=True)
         if not libros:
             QMessageBox.warning(self, "Sin libros", "No hay libros disponibles para seleccionar.")
-            self.combo_ambito.setCurrentText("Todos los libros")
+            # self.combo_ambito.setCurrentText("Todos los libros") # ELIMINADO
             return
             
         dialog = DialogoSeleccionLibros(self, libros)
@@ -1620,8 +1765,11 @@ class BibliotecaApp(BaseApp):
                     self.label_ambito_actual.setText(f"🎯 {len(nombres)} libros seleccionados")
                 else:
                     self.label_ambito_actual.setText(f"🎯 {', '.join(nombres)}")
+                self.actualizar_indicadores_analisis()
             else:
-                self.combo_ambito.setCurrentText("Todos los libros")
+                self.label_ambito_actual.setText("📚 Todos los libros")
+                self.libros_consulta = None
+                self.actualizar_indicadores_analisis()
                 
     # ... (Resto de on_add_book, etc) - ELIMINADO: Movido a LibraryManagerDialog
     # def on_add_book(self): ...
@@ -1641,85 +1789,6 @@ class BibliotecaApp(BaseApp):
     # Los métodos de procesamiento por lote también han sido movidos al Manager
 
     # ... (on_enviar_consulta, etc)
-        """Manejador para enviar consulta IA"""
-        pregunta = self.input_pregunta.text().strip()
-        if not pregunta:
-            QMessageBox.warning(self, "Advertencia", "Por favor escribe una pregunta")
-            return
-        
-        # Verificar que hay libros cargados
-        libros = self.db_manager.obtener_libros()
-        if not libros:
-            QMessageBox.warning(
-                self, 
-                "Sin Libros", 
-                "No hay libros cargados en el sistema.\n\n"
-                "Por favor agrega algunos libros PDF antes de hacer consultas."
-            )
-            return
-        
-        # Verificar selección específica
-        if self.libros_consulta and not any(libro['id'] in self.libros_consulta for libro in libros):
-            QMessageBox.warning(
-                self,
-                "Libros no disponibles",
-                "Algunos de los libros seleccionados ya no están disponibles."
-            )
-            self.combo_ambito.setCurrentText("Todos los libros")
-            return
-        
-        # Verificar API key
-        if not config_manager.get_api_key():
-            QMessageBox.warning(
-                self,
-                "API Key Requerida",
-                "Necesitas configurar tu API Key de OpenAI para usar las consultas IA.\n\n"
-                "Ve a Configuración → IA y agrega tu API Key."
-            )
-            return
-        
-        # Deshabilitar botón durante el procesamiento
-        self.btn_enviar_consulta.setEnabled(False)
-        self.btn_enviar_consulta.setText("Procesando...")
-        
-        # Mostrar información del ámbito de búsqueda
-        if self.libros_consulta:
-            if len(self.libros_consulta) == 1:
-                libro = next((l for l in libros if l['id'] == self.libros_consulta[0]), None)
-                ambito_info = f"Buscando en: {libro['titulo'] if libro else 'libro seleccionado'}"
-            else:
-                ambito_info = f"Buscando en: {len(self.libros_consulta)} libros seleccionados"
-        else:
-            ambito_info = "Buscando en: todos los libros"
-            
-        self.texto_respuesta.setPlainText(f"🔄 {ambito_info}\n\nProcesando tu consulta...")
-        
-        # Crear y ejecutar thread de consulta
-        self.consulta_thread = ConsultaThread(
-            pregunta, 
-            self.db_manager, 
-            self.query_processor, 
-            self.libros_consulta
-        )
-        self.consulta_thread.respuesta_lista.connect(self.actualizar_respuesta_ui)
-        self.consulta_thread.habilitar_boton.connect(self.rehabilitar_boton_ui)
-        self.consulta_thread.error_ocurrido.connect(self.mostrar_error_consulta)
-        self.consulta_thread.start()
-
-    def actualizar_respuesta_ui(self, respuesta):
-        """Actualizar la respuesta en la UI (thread-safe)"""
-        self.texto_respuesta.setPlainText(respuesta)
-
-    def rehabilitar_boton_ui(self):
-        """Rehabilitar el botón de consulta (thread-safe)"""
-        self.btn_enviar_consulta.setText("🚀 Enviar Consulta")
-        self.btn_enviar_consulta.setEnabled(True)
-
-    def mostrar_error_consulta(self, error_msg):
-        """Mostrar error en consulta (thread-safe)"""
-        self.texto_respuesta.setPlainText(f"❌ {error_msg}")
-        self.rehabilitar_boton_ui()
-
     def actualizar_estadisticas(self):
         """Actualizar las estadísticas en la UI"""
         # Panel de estadísticas removido - método mantenido para compatibilidad

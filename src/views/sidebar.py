@@ -3,10 +3,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
-from views.styles import get_sidebar_style
-
 class Sidebar(QWidget):
-    """Barra lateral de navegación con menú de aplicaciones"""
+    """Barra de navegación horizontal con menú de aplicaciones"""
     
     def __init__(self, nav_controller):
         super().__init__()
@@ -23,179 +21,84 @@ class Sidebar(QWidget):
         self.nav_controller.apps_updated.connect(self.setup_app_buttons)
         
     def setup_ui(self):
-        """Configurar la interfaz de la barra lateral"""
-        self.setFixedWidth(int(240 * self.scale_factor))
-        self.setStyleSheet(get_sidebar_style())
-        
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        
-        # Header de la barra lateral
-        header = self.create_sidebar_header()
-        layout.addWidget(header)
-        
-        # Área scrollable para las aplicaciones
-        scroll_area = self.create_apps_area()
-        layout.addWidget(scroll_area)
-        
-        # Footer de la barra lateral
-        footer = self.create_sidebar_footer()
-        layout.addWidget(footer)
-        
-    def create_apps_area(self):
-        """Crear área scrollable para las aplicaciones"""
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setStyleSheet(f"""
-            QScrollArea {{
-                border: none;
-                background-color: #34495e;
+        """Configurar la interfaz de la barra de navegación horizontal (Tema Claro)"""
+        self.setFixedHeight(int(70 * self.scale_factor))
+        self.setStyleSheet(f"""
+            QWidget#NavigationBar {{
+                background-color: #ffffff;
+                border-bottom: 1px solid #dee2e6;
             }}
-            QScrollBar:vertical {{
-                background-color: #2c3e50;
-                width: {int(10 * self.scale_factor)}px;
-                margin: 0px;
-            }}
-            QScrollBar::handle:vertical {{
-                background-color: #46627f;
-                border-radius: {int(5 * self.scale_factor)}px;
-                min-height: {int(20 * self.scale_factor)}px;
-            }}
-            QScrollBar::handle:vertical:hover {{
-                background-color: #5d7a97;
-            }}
-        """)
-        
-        # Widget contenedor de aplicaciones
-        self.apps_widget = QWidget()
-        self.apps_layout = QVBoxLayout(self.apps_widget)
-        self.apps_layout.setContentsMargins(10, 10, 10, 10)
-        self.apps_layout.setSpacing(5)
-        
-        # Título de la sección
-        section_title = QLabel("APLICACIONES")
-        section_title.setStyleSheet(f"""
             QLabel {{
-                color: #95a5a6;
-                font-size: {int(13 * self.scale_factor)}px;
-                font-weight: bold;
-                padding: {int(10 * self.scale_factor)}px {int(5 * self.scale_factor)}px;
+                color: #2c3e50;
+                background: transparent;
             }}
         """)
-        self.apps_layout.addWidget(section_title)
+        self.setObjectName("NavigationBar")
         
-        # Contenedor específico para los botones
+        # Layout horizontal principal
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(20, 0, 20, 0)
+        layout.setSpacing(15)
+        
+        # 1. Logo y Título
+        self.header = self.create_compact_header()
+        layout.addWidget(self.header)
+        
+        # Separador vertical
+        line = QFrame()
+        line.setFrameShape(QFrame.VLine)
+        line.setFrameShadow(QFrame.Plain)
+        line.setFixedWidth(1)
+        line.setStyleSheet("background-color: #dee2e6; margin: 15px 5px;")
+        layout.addWidget(line)
+        
+        # 2. Contenedor de Botones (Horizontal)
         self.buttons_container = QWidget()
-        self.buttons_layout = QVBoxLayout(self.buttons_container)
+        self.buttons_container.setStyleSheet("background: transparent; border: none;")
+        self.buttons_layout = QHBoxLayout(self.buttons_container)
         self.buttons_layout.setContentsMargins(0, 0, 0, 0)
-        self.buttons_layout.setSpacing(5)
-        
-        # Agregar el contenedor de botones al layout principal
-        self.apps_layout.addWidget(self.buttons_container)
+        self.buttons_layout.setSpacing(8)
+        layout.addWidget(self.buttons_container)
         
         # Espacio flexible
-        self.apps_layout.addStretch()
+        layout.addStretch()
         
-        scroll_area.setWidget(self.apps_widget)
-        return scroll_area
+        # 3. Info de versión o estado
+        self.info_label = QLabel("v1.0.1 • Edición Profesional")
+        self.info_label.setStyleSheet(f"color: #95a5a6; font-size: {int(12 * self.scale_factor)}px;")
+        layout.addWidget(self.info_label)
+
+    def create_compact_header(self):
+        """Crear el header compacto para la versión horizontal"""
+        header = QWidget()
+        header.setStyleSheet("background: transparent; border: none;")
+        layout = QHBoxLayout(header)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
         
-    def create_sidebar_header(self):
-        """Crear el header de la barra lateral"""
-        header = QFrame()
-        header.setFixedHeight(int(80 * self.scale_factor))
-        header.setStyleSheet(f"""
-            QFrame {{
-                background-color: #2c3e50;
-                border-bottom: 1px solid #46627f;
-            }}
-        """)
+        logo = QLabel("📚")
+        logo.setStyleSheet(f"font-size: {int(24 * self.scale_factor)}px;")
+        layout.addWidget(logo)
         
-        layout = QVBoxLayout(header)
-        layout.setContentsMargins(15, 10, 15, 10)
-        
-        # Logo y título
-        logo_layout = QHBoxLayout()
-        
-        # Logo
-        logo_label = QLabel("📚")
-        logo_label.setStyleSheet(f"font-size: {int(24 * self.scale_factor)}px;")
-        logo_layout.addWidget(logo_label)
-        
-        title_layout = QVBoxLayout()
-        title = QLabel("Sistema IA")
+        title = QLabel("BIBLIOTECA IA")
         title.setStyleSheet(f"""
             QLabel {{
-                color: white;
-                font-size: {int(18 * self.scale_factor)}px;
+                color: #2c3e50;
+                font-size: {int(16 * self.scale_factor)}px;
                 font-weight: bold;
+                letter-spacing: 1px;
             }}
         """)
-        subtitle = QLabel("Biblioteca")
-        subtitle.setStyleSheet(f"""
-            QLabel {{
-                color: #bdc3c7;
-                font-size: {int(12 * self.scale_factor)}px;
-            }}
-        """)
-        
-        title_layout.addWidget(title)
-        title_layout.addWidget(subtitle)
-        logo_layout.addLayout(title_layout)
-        
-        layout.addLayout(logo_layout)
+        layout.addWidget(title)
         
         return header
         
-    def create_sidebar_footer(self):
-        """Crear el footer de la barra lateral"""
-        footer = QFrame()
-        footer.setFixedHeight(int(50 * self.scale_factor))
-        footer.setStyleSheet(f"""
-            QFrame {{
-                background-color: #2c3e50;
-                border-top: 1px solid #46627f;
-            }}
-        """)
-        
-        layout = QVBoxLayout(footer)
-        layout.setContentsMargins(15, 5, 15, 5)
-        
-        # Información de versión
-        version_label = QLabel("v1.0.0")
-        version_label.setStyleSheet(f"""
-            QLabel {{
-                color: #7f8c8d;
-                font-size: {int(12 * self.scale_factor)}px;
-            }}
-        """)
-        layout.addWidget(version_label)
-        
-        # Estado
-        status_label = QLabel("● En línea")
-        status_label.setStyleSheet(f"""
-            QLabel {{
-                color: #2ecc71;
-                font-size: {int(12 * self.scale_factor)}px;
-                font-weight: bold;
-            }}
-        """)
-        layout.addWidget(status_label)
-        
-        return footer
-        
     def setup_app_buttons(self):
         """Configurar los botones de las aplicaciones"""
-        # PRIMERO limpiar cualquier botón existente
         self.clear_existing_buttons()
         
         apps = self.nav_controller.get_available_apps()
-        print(f"🔍 Sidebar: Configurando {len(apps)} aplicaciones")
-        
         for app_name, app in apps.items():
-            print(f"   - Agregando botón: {app_name} -> {app.get_title()}")
             self.add_app_button(app_name, app)
 
     def clear_existing_buttons(self):
@@ -205,59 +108,50 @@ class Sidebar(QWidget):
         self.app_buttons.clear()
 
     def add_app_button(self, app_name: str, app):
-        """Agregar un botón de aplicación a la barra lateral"""
+        """Agregar un botón de aplicación horizontal"""
         btn = QPushButton(f"{app.get_icon()} {app.get_title()}")
         btn.setProperty("app_name", app_name)
         btn.setCursor(Qt.PointingHandCursor)
         
-        # Estilo del botón
+        # Estilo del botón horizontal (Tema Claro)
         btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: transparent;
-                color: #ecf0f1;
+                color: #2c3e50;
                 border: none;
-                text-align: left;
-                padding: {int(10 * self.scale_factor)}px {int(15 * self.scale_factor)}px;
-                font-size: {int(15 * self.scale_factor)}px;
+                padding: {int(8 * self.scale_factor)}px {int(18 * self.scale_factor)}px;
+                font-size: {int(14 * self.scale_factor)}px;
                 border-radius: {int(5 * self.scale_factor)}px;
+                font-weight: 500;
             }}
             QPushButton:hover {{
-                background-color: #46627f;
-            }}
-            QPushButton:pressed {{
-                background-color: #4a6a8a;
+                background-color: #f1f3f5;
+                color: #3498db;
             }}
             QPushButton[active="true"] {{
-                background-color: #3498db;
-                color: white;
+                background-color: #e7f1f9;
+                color: #3498db;
+                font-weight: bold;
+                border-bottom: 2px solid #3498db;
+                border-radius: 0px;
             }}
         """)
         
-        # Guardar referencia al botón
         self.app_buttons[app_name] = btn
-        
-        # Conectar click
         btn.clicked.connect(lambda checked, name=app_name: self.on_app_clicked(name))
-        
-        # Agregar al contenedor de botones
         self.buttons_layout.addWidget(btn)
         
     def on_app_clicked(self, app_name: str):
-        """Cuando se hace click en una aplicación"""
-        print(f"🖱️ Sidebar: Click en aplicación: {app_name}")
-        
-        # Resetear estilo de todos los botones
+        """Manejar el click en una aplicación con feedback visual"""
         for btn in self.app_buttons.values():
             btn.setProperty("active", False)
             btn.style().unpolish(btn)
             btn.style().polish(btn)
         
-        # Estilizar botón activo
         if app_name in self.app_buttons:
             active_btn = self.app_buttons[app_name]
             active_btn.setProperty("active", True)
             active_btn.style().unpolish(active_btn)
             active_btn.style().polish(active_btn)
         
-        # Cambiar aplicación
         self.nav_controller.set_current_app(app_name)

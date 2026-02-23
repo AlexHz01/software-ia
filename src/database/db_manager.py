@@ -36,6 +36,11 @@ class Libro(Base):
     estado = Column(String(50), default='procesado')
     # Usar la función para determinar el tipo de columna
     metadatos = Column(get_json_column(), default=dict)
+    guia_fuente = Column(Text, nullable=True)
+    guion_podcast = Column(Text, nullable=True)
+    mapa_mental = Column(Text, nullable=True)
+    informe_estudio = Column(Text, nullable=True)
+    cuestionario = Column(Text, nullable=True)
 
 class Fragmento(Base):
     __tablename__ = 'fragmentos'
@@ -61,6 +66,7 @@ class Consulta(Base):
     __tablename__ = 'consultas'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
+    titulo = Column(String(200), nullable=True)  # Nuevo campo para renombrar historial
     pregunta = Column(Text, nullable=False)
     respuesta = Column(Text, nullable=False)
     # Usar la función para determinar el tipo de columna
@@ -160,6 +166,42 @@ class DatabaseManager:
                     """))
             
             print("✅ Índices de base de datos optimizados")
+
+            # MIGRACIÓN: Agregar columnas si no existen (SQLite)
+            if self.tipo_bd == "sqlite":
+                with self.engine.connect() as conn:
+                    # Verificar columnas en tabla libros
+                    cursor = conn.execute(sa.text("PRAGMA table_info(libros)"))
+                    columnas = [row[1] for row in cursor.fetchall()]
+                    
+                    if 'guia_fuente' not in columnas:
+                        conn.execute(sa.text("ALTER TABLE libros ADD COLUMN guia_fuente TEXT"))
+                        print("➕ Columna 'guia_fuente' agregada a SQLite")
+                        
+                    if 'guion_podcast' not in columnas:
+                        conn.execute(sa.text("ALTER TABLE libros ADD COLUMN guion_podcast TEXT"))
+                        print("➕ Columna 'guion_podcast' agregada a SQLite")
+                        
+                    if 'mapa_mental' not in columnas:
+                        conn.execute(sa.text("ALTER TABLE libros ADD COLUMN mapa_mental TEXT"))
+                        print("➕ Columna 'mapa_mental' agregada a SQLite")
+                        
+                    if 'informe_estudio' not in columnas:
+                        conn.execute(sa.text("ALTER TABLE libros ADD COLUMN informe_estudio TEXT"))
+                        print("➕ Columna 'informe_estudio' agregada a SQLite")
+                        
+                    if 'cuestionario' not in columnas:
+                        conn.execute(sa.text("ALTER TABLE libros ADD COLUMN cuestionario TEXT"))
+                        print("➕ Columna 'cuestionario' agregada a SQLite")
+                
+                # Verificar columnas en tabla consultas (SQLite)
+                with self.engine.connect() as conn:
+                    cursor = conn.execute(sa.text("PRAGMA table_info(consultas)"))
+                    columnas = [row[1] for row in cursor.fetchall()]
+                    
+                    if 'titulo' not in columnas:
+                        conn.execute(sa.text("ALTER TABLE consultas ADD COLUMN titulo VARCHAR(200)"))
+                        print("➕ Columna 'titulo' agregada a tabla 'consultas' en SQLite")
             
         except Exception as e:
             print(f"❌ Error optimizando índices: {e}")
@@ -215,6 +257,42 @@ class DatabaseManager:
         except Exception as e:
             session.rollback()
             raise e
+        finally:
+            session.close()
+
+    def actualizar_guia_fuente(self, libro_id: int, guia_texto: str) -> bool:
+        """Guardar o actualizar la Guía de Fuente permanente de un libro"""
+        session = self.get_session()
+        try:
+            libro = session.query(Libro).get(libro_id)
+            if libro:
+                libro.guia_fuente = guia_texto
+                session.commit()
+                self._libros_cache = None # Invalida cache
+                return True
+            return False
+        except Exception as e:
+            session.rollback()
+            print(f"❌ Error actualizando guía de fuente: {e}")
+            return False
+        finally:
+            session.close()
+
+    def actualizar_guion_podcast(self, libro_id: int, guion_texto: str) -> bool:
+        """Guardar o actualizar el guion de podcast permanente de un libro"""
+        session = self.get_session()
+        try:
+            libro = session.query(Libro).get(libro_id)
+            if libro:
+                libro.guion_podcast = guion_texto
+                session.commit()
+                self._libros_cache = None
+                return True
+            return False
+        except Exception as e:
+            session.rollback()
+            print(f"❌ Error actualizando guion: {e}")
+            return False
         finally:
             session.close()
     
@@ -295,7 +373,12 @@ class DatabaseManager:
                     'total_fragmentos': libro.total_fragmentos,
                     'fecha_procesado': libro.fecha_procesado,
                     'estado': libro.estado,
-                    'metadata': libro.metadatos or {}
+                    'metadata': libro.metadatos or {},
+                    'guia_fuente': libro.guia_fuente,
+                    'guion_podcast': libro.guion_podcast,
+                    'mapa_mental': libro.mapa_mental,
+                    'informe_estudio': libro.informe_estudio,
+                    'cuestionario': libro.cuestionario
                 }
                 for libro in libros
             ]
@@ -579,7 +662,12 @@ class DatabaseManager:
                     'total_paginas': libro.total_paginas,
                     'total_fragmentos': libro.total_fragmentos,
                     'fecha_procesado': libro.fecha_procesado,
-                    'metadata': libro.metadatos or {}
+                    'metadata': libro.metadatos or {},
+                    'guia_fuente': libro.guia_fuente,
+                    'guion_podcast': libro.guion_podcast,
+                    'mapa_mental': libro.mapa_mental,
+                    'informe_estudio': libro.informe_estudio,
+                    'cuestionario': libro.cuestionario
                 }
                 for libro in libros
             ]
@@ -666,7 +754,33 @@ class DatabaseManager:
                 
         except Exception as e:
             print(f"❌ Error actualizando actividad reciente: {e}")
-    
+    def actualizar_studio_libro(self, libro_id: int, tipo: str, contenido: str) -> bool:
+        """Actualizar el contenido de Notebook Studio para un libro"""
+        session = self.get_session()
+        try:
+            libro = session.query(Libro).filter(Libro.id == libro_id).first()
+            if not libro:
+                return False
+                
+            if tipo == "mapa":
+                libro.mapa_mental = contenido
+            elif tipo == "informe":
+                libro.informe_estudio = contenido
+            elif tipo == "cuestionario":
+                libro.cuestionario = contenido
+            else:
+                return False
+                
+            session.commit()
+            self._libros_cache = None # Invalida cache
+            print(f"✅ Notebook Studio: {tipo} actualizado para libro {libro_id}")
+            return True
+        except Exception as e:
+            session.rollback()
+            print(f"❌ Error actualizando studio de libro: {e}")
+            return False
+        finally:
+            session.close()
 
     def eliminar_libro(self, libro_id: int) -> bool:
         """Eliminar un libro y todos sus fragmentos"""
@@ -691,28 +805,51 @@ class DatabaseManager:
             session.close()
     
     def obtener_historial_consultas(self, limite: int = 50, busqueda: str = None) -> List[Dict]:
-        """Obtener historial de consultas guardadas"""
+        """Obtener historial con soporte para búsqueda por texto y títulos de libros"""
         session = self.get_session()
         try:
             query = session.query(Consulta)
             
+            # Si hay búsqueda, filtrar por pregunta, respuesta o intentar buscar por libro
             if busqueda:
-                query = query.filter(
-                    sa.or_(
-                        Consulta.pregunta.ilike(f"%{busqueda}%"),
-                        Consulta.respuesta.ilike(f"%{busqueda}%")
-                    )
-                )
+                # Buscar IDs de libros que coincidan con el título
+                libros_match = session.query(Libro.id).filter(Libro.titulo.ilike(f"%{busqueda}%")).all()
+                libros_ids = [l[0] for l in libros_match]
+                
+                filters = [
+                    Consulta.pregunta.ilike(f"%{busqueda}%"),
+                    Consulta.respuesta.ilike(f"%{busqueda}%")
+                ]
+                
+                # Para SQLite/JSON, la búsqueda en libros_referenciados es más compleja, 
+                # así que complementamos con una búsqueda de IDs si encontramos libros que coincidan
+                for lid in libros_ids:
+                    filters.append(sa.text(f"libros_referenciados LIKE '%{lid}%'"))
+                
+                query = query.filter(sa.or_(*filters))
             
             consultas = query.order_by(Consulta.fecha_consulta.desc()).limit(limite).all()
+            
+            # Obtener nombres de libros para todas las consultas (optimizado)
+            todos_libros_ids = set()
+            for c in consultas:
+                if c.libros_referenciados:
+                    todos_libros_ids.update(c.libros_referenciados)
+            
+            nombres_libros = {}
+            if todos_libros_ids:
+                libros_info = session.query(Libro.id, Libro.titulo).filter(Libro.id.in_(list(todos_libros_ids))).all()
+                nombres_libros = {l.id: l.titulo for l in libros_info}
             
             return [
                 {
                     'id': c.id,
+                    'titulo': c.titulo, # Nuevo campo
                     'pregunta': c.pregunta,
                     'respuesta': c.respuesta,
                     'fecha': c.fecha_consulta,
                     'libros_referenciados': c.libros_referenciados,
+                    'libros_titulos': [nombres_libros.get(lid, f"Libro {lid}") for lid in (c.libros_referenciados or [])],
                     'modelo': c.modelo_utilizado
                 }
                 for c in consultas
@@ -736,6 +873,21 @@ class DatabaseManager:
         except Exception as e:
             session.rollback()
             print(f"❌ Error eliminando consulta: {e}")
+            return False
+    def actualizar_titulo_consulta(self, consulta_id: int, nuevo_titulo: str) -> bool:
+        """Actualizar el título personalizado de una consulta del historial"""
+        session = self.get_session()
+        try:
+            consulta = session.query(Consulta).filter(Consulta.id == consulta_id).first()
+            if consulta:
+                consulta.titulo = nuevo_titulo
+                session.commit()
+                print(f"✅ Historial {consulta_id} renombrado a: {nuevo_titulo}")
+                return True
+            return False
+        except Exception as e:
+            session.rollback()
+            print(f"❌ Error al renombrar historial: {e}")
             return False
         finally:
             session.close()
