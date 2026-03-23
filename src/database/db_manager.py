@@ -41,6 +41,7 @@ class Libro(Base):
     mapa_mental = Column(Text, nullable=True)
     informe_estudio = Column(Text, nullable=True)
     cuestionario = Column(Text, nullable=True)
+    ruta_audio_podcast = Column(Text, nullable=True)
 
 class Fragmento(Base):
     __tablename__ = 'fragmentos'
@@ -193,6 +194,10 @@ class DatabaseManager:
                     if 'cuestionario' not in columnas:
                         conn.execute(sa.text("ALTER TABLE libros ADD COLUMN cuestionario TEXT"))
                         print("➕ Columna 'cuestionario' agregada a SQLite")
+                        
+                    if 'ruta_audio_podcast' not in columnas:
+                        conn.execute(sa.text("ALTER TABLE libros ADD COLUMN ruta_audio_podcast TEXT"))
+                        print("➕ Columna 'ruta_audio_podcast' agregada a SQLite")
                 
                 # Verificar columnas en tabla consultas (SQLite)
                 with self.engine.connect() as conn:
@@ -295,6 +300,24 @@ class DatabaseManager:
             return False
         finally:
             session.close()
+
+    def actualizar_ruta_audio_podcast(self, libro_id: int, ruta: str) -> bool:
+        """Guardar o actualizar la ruta del audio de podcast de un libro"""
+        session = self.get_session()
+        try:
+            libro = session.query(Libro).get(libro_id)
+            if libro:
+                libro.ruta_audio_podcast = ruta
+                session.commit()
+                self._libros_cache = None
+                return True
+            return False
+        except Exception as e:
+            session.rollback()
+            print(f"❌ Error actualizando ruta de podcast: {e}")
+            return False
+        finally:
+            session.close()
     
     def agregar_fragmentos(self, libro_id: int, fragmentos: List[Dict]):
         """Agregar fragmentos de texto de un libro con embeddings"""
@@ -378,7 +401,8 @@ class DatabaseManager:
                     'guion_podcast': libro.guion_podcast,
                     'mapa_mental': libro.mapa_mental,
                     'informe_estudio': libro.informe_estudio,
-                    'cuestionario': libro.cuestionario
+                    'cuestionario': libro.cuestionario,
+                    'ruta_audio_podcast': libro.ruta_audio_podcast
                 }
                 for libro in libros
             ]
@@ -667,7 +691,8 @@ class DatabaseManager:
                     'guion_podcast': libro.guion_podcast,
                     'mapa_mental': libro.mapa_mental,
                     'informe_estudio': libro.informe_estudio,
-                    'cuestionario': libro.cuestionario
+                    'cuestionario': libro.cuestionario,
+                    'ruta_audio_podcast': libro.ruta_audio_podcast
                 }
                 for libro in libros
             ]

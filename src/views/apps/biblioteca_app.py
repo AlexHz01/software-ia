@@ -1182,6 +1182,23 @@ class BibliotecaApp(BaseApp):
         self.btn_deep_dive.clicked.connect(self.on_generar_deep_dive)
         header_layout.addWidget(self.btn_deep_dive)
         
+        self.btn_play_podcast = QPushButton("▶️ Play Audio")
+        self.btn_play_podcast.setToolTip("Escuchar Podcast (Deep Dive)")
+        self.btn_play_podcast.setStyleSheet("""
+            QPushButton {
+                background-color: #2ecc71;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #27ae60; }
+            QPushButton:disabled { background-color: #ecf0f1; color: #bdc3c7; }
+        """)
+        self.btn_play_podcast.clicked.connect(self.on_play_podcast)
+        header_layout.addWidget(self.btn_play_podcast)
+        
         # Botón para agregar libro (DIRECTO) - Mantenido pero reducido, o eliminado si preferimos todo en el gestor
         # Vamos a dejar solo el gestor para limpiar, así que eliminamos btn_add explícito aquí
         # btn_add = QPushButton("➕") ...
@@ -1503,11 +1520,13 @@ class BibliotecaApp(BaseApp):
             # Ocultar botones avanzados de NotebookLM si hay varios o ninguno
             self.btn_source_guide.hide()
             self.btn_deep_dive.hide()
+            self.btn_play_podcast.hide()
             return
         
         # Mostrar botones solo para single book selection
         self.btn_source_guide.show()
         self.btn_deep_dive.show()
+        self.btn_play_podcast.show()
         self.btn_studio.show()
         self.status_indicators.show()
         
@@ -1713,6 +1732,62 @@ class BibliotecaApp(BaseApp):
                 self.error_ocurrido.emit(str(e))
             finally:
                 self.habilitar_boton.emit()
+
+        threading.Thread(target=run).start()
+
+    def on_play_podcast(self):
+        """Generar o reproducir el audio del podcast"""
+        if not self.libros_consulta or len(self.libros_consulta) != 1:
+            QMessageBox.warning(self, "Atención", "Selecciona exactamente un libro.")
+            return
+
+        libros = self.db_manager.obtener_libros()
+        libro = next((l for l in libros if l['id'] == self.libros_consulta[0]), None)
+        
+        if not libro:
+            return
+
+        # Si ya existe el audio, reproducirlo
+        if libro.get('ruta_audio_podcast') and os.path.exists(libro['ruta_audio_podcast']):
+            self.add_system_message(f"Reproduciendo podcast: {libro['titulo']}")
+            try:
+                os.startfile(libro['ruta_audio_podcast'])  # Windows
+            except AttributeError:
+                import subprocess
+                subprocess.call(['xdg-open' if sys.platform != 'darwin' else 'open', libro['ruta_audio_podcast']])
+            self.add_ai_message(f"### 🎧 Podcast Reproduciendo\\n\\nAbriendo el archivo de audio externamente...")
+            return
+
+        # Si no existe, verificar que haya guion
+        guion = libro.get('guion_podcast')
+        if not guion:
+            QMessageBox.warning(self, "Atención", "Primero debes generar el guion del podcast (Botón 'Deep Dive').")
+            return
+
+        self.add_system_message("🎤 Generando voces para el podcast... (Esto tomará unos segundos o minutos dependiendo de la longitud)")
+        self.chat_input.set_enabled(False)
+        self.btn_play_podcast.setEnabled(False)
+
+        def run():
+            try:
+                # Inicializamos dinámicamente
+                from ai.audio_processor import AudioProcessor
+                processor = AudioProcessor()
+                
+                ruta_final = processor.generar_podcast_audio(guion, libro['id'], libro['titulo'])
+                
+                # Guardar ruta en la DB
+                self.db_manager.actualizar_ruta_audio_podcast(libro['id'], ruta_final)
+                
+                # Mostrar en el chat
+                self.respuesta_lista.emit(f"### ▶️ Podcast Generado Exitosamente\\n\\nEl archivo se ha guardado en:\\n`{ruta_final}`\\n\\nVuelve a hacer clic en 'Play Audio' para escucharlo.")
+            except Exception as e:
+                self.error_ocurrido.emit(f"Error generando audio: {str(e)}")
+            finally:
+                self.habilitar_boton.emit()
+                # Volver a habilitar el botón
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(0, lambda: self.btn_play_podcast.setEnabled(True))
 
         threading.Thread(target=run).start()
 
